@@ -410,7 +410,8 @@ if (window.GM && GM.statique && 'serviceWorker' in navigator) navigator.serviceW
 <script>
 (() => {
 // ---------- Ingrédients connus : clé, libellé, catégorie, alias ----------
-const CATS = {frais:'Crèmerie & œufs', viande:'Viandes & poissons', legume:'Fruits & légumes', feculent:'Féculents & pains', epicerie:'Épicerie & conserves', aromate:'Herbes & épices'};
+const CATS = GM.donnees.rayons || {frais:'Crèmerie & œufs', viande:'Viandes & poissons', legume:'Fruits & légumes', feculent:'Féculents & pains', epicerie:'Épicerie & conserves', aromate:'Herbes & épices'};
+const rayonsOuverts = new Set();  // ajouts rapides : rayons affichés en entier
 const ING_RAW = GM.donnees.ingredients;
 const STOP = new Set(['de','du','des','d','la','le','les','l','en','a','au','aux','un','une']);
 function norm(s){
@@ -648,12 +649,19 @@ function renderPantry(){
     const items = ING_RAW.filter(r=>r[2]===c && !have.has(r[0]));
     if (!items.length) continue;
     const wrap = document.createElement('div'); wrap.className = 'cat';
-    wrap.innerHTML = `<p class="eyebrow">${CATS[c]}</p><div class="chips"></div>`;
-    for (const [k,label] of items){
+    wrap.innerHTML = `<p class="eyebrow">${CATS[c]} <span class="count">${items.length}</span></p><div class="chips"></div>`;
+    const visibles = rayonsOuverts.has(c) ? items : items.slice(0, 12);
+    for (const [k,label] of visibles){
       const el = document.createElement('span'); el.className = 'chip plus';
       el.innerHTML = `<button type="button" class="lbl">+ ${esc(label)}</button>`;
       el.querySelector('button').onclick = () => { touch(); addIngredient(label); update(); const it = pantry.find(p=>p.id===k); if (it) openItem(it); };
       wrap.querySelector('.chips').append(el);
+    }
+    if (visibles.length < items.length){
+      const plus = document.createElement('button'); plus.type = 'button'; plus.className = 'link';
+      plus.textContent = `Voir les ${items.length - visibles.length} autres`;
+      plus.onclick = () => { rayonsOuverts.add(c); renderPantry(); };
+      wrap.querySelector('.chips').append(plus);
     }
     ql.append(wrap);
   }
@@ -1076,14 +1084,17 @@ $('#dishForm').onsubmit = e => {
 // ---------- Fiche d'un ingrédient du placard : quantité par boutons ----------
 const PRESETS = {g:[50,100,125,200,250,500,750,1000,1500], kg:[0.5,1,1.5,2,2.5,5], cl:[10,20,25,33,50,75], l:[0.5,1,1.5,2,3,6], pc:[1,2,3,4,5,6,8,10,12], tranche:[2,4,6,8,10,12], gousse:[1,2,3,4,5,10], boite:[1,2,3,4,5,6], rouleau:[1,2,3], sachet:[1,2,3,4,5,10]};
 const ULABEL = {pc:'pièces',g:'g',kg:'kg',cl:'cl',l:'L',tranche:'tranches',gousse:'gousses',boite:'boîtes',rouleau:'rouleaux',sachet:'sachets'};
+// unité proposée d'après le rayon, pour les produits sans réglage particulier
+const UNITE_RAYON = {fromage:'g', boisson:'l', viande:'g', aromate:'pc'};
+function rayonDe(k){ return (ING_RAW.find(r => r[0]===k) || [])[2]; }
 function unitChoices(k, cur){
-  const base = EDU[k] || 'pc';
+  const base = EDU[k] || UNITE_RAYON[rayonDe(k)] || 'pc';
   const dim = UNIT[base]?.dim;
   let l;
   if (!k) l = ['pc','g','kg','cl','l'];
   else if (dim==='g') l = ['g','kg', ...(W[k]?['pc']:[])];
-  else if (dim==='ml') l = ['cl','l'];
-  else if (base==='pc') l = k==='oeuf' ? ['pc'] : ['pc', ...(W[k]?['g','kg']:[])];
+  else if (dim==='ml') l = ['cl','l', ...(rayonDe(k)==='boisson' ? ['pc'] : [])];
+  else if (base==='pc') l = k==='oeuf' ? ['pc'] : ['pc', 'g', 'kg'];
   else if (base==='tranche') l = ['tranche','g'];
   else if (base==='boite') l = ['boite','g','cl'];
   else if (base==='gousse') l = ['gousse','pc'];
@@ -1099,7 +1110,7 @@ function stepOf(u, v){
 }
 function openItem(p){
   const k = p.id.startsWith('x:') ? null : p.id;
-  let u = p.u || EDU[k] || 'pc';
+  let u = p.u || EDU[k] || UNITE_RAYON[rayonDe(k)] || 'pc';
   let v = p.n;
   const body = $('#dBody');
   const commit = () => { touch(); update(); dlg.close(); };
@@ -1211,8 +1222,10 @@ function suggestIngredients(q){
   const ws = n.split(' ');
   const out = [];
   const score = m => m===n ? 100 : m.startsWith(n) ? 80 : (ws.every(w=>m.split(' ').some(x=>x.startsWith(w))) ? 60 : ws.every(w=>m.includes(w)) ? 40 : 0);
+  const brut = String(q).trim().toLowerCase();
   for (const [k,label,cat,al] of ING_RAW){
     let best = score(norm(label)), via = '';
+    if (best && best < 100 && label.toLowerCase().startsWith(brut)) best += 5;  // « pâté » : le pâté avant la pâte à pizza
     for (const a of al.split('|').filter(Boolean)){ const sc = score(norm(a)) - 3; if (sc > best){ best = sc; via = a; } }
     if (best>0) out.push({k, label, cat, score:best, via});
   }

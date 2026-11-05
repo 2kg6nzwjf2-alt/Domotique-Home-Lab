@@ -183,3 +183,13 @@ def test_page_statique_pour_github_pages(tmp_path):
     assert manifeste["start_url"] == "./" and not manifeste["icons"][0]["src"].startswith("/")
     assert os.path.isfile(tmp_path / "_site" / ".nojekyll")
     assert "garde-manger/" in open(tmp_path / "_site" / "index.html", encoding="utf-8").read()
+
+
+def test_catalogue_de_produits():
+    noms = {nom: (cle, rayon, alias) for cle, nom, rayon, alias in donnees.PRODUITS}
+    assert len(donnees.PRODUITS) >= 290
+    for nom in ["Fromage à raclette", "Pâte à tartiner", "Chocolat en poudre", "Confiture de fraises", "Sodas", "Café"]:
+        assert nom in noms, nom
+    assert "nutella" in noms["Pâte à tartiner"][2] and "nesquik" in noms["Chocolat en poudre"][2]
+    assert {rayon for _, _, rayon, _ in donnees.PRODUITS} <= set(donnees.RAYONS)
+    assert donnees.pour_interface()["rayons"] == donnees.RAYONS

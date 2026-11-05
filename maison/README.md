@@ -2,6 +2,7 @@
 
 Tableau de bord de la maison, pensé pour l'iPhone et l'iPad :
 
+- **Météo** : aujourd'hui et demain, par [Open-Meteo](https://open-meteo.com) (gratuit, sans clé) ;
 - **Aujourd'hui** : les rendez-vous du jour de Google Agenda ;
 - **Tâches** : vos Rappels Apple (tâches, courses…), envoyés par un Raccourci de l'iPhone ;
 - **Sécurité** : l'état de l'alarme et la vidéo en direct de la caméra Smart Life ;
@@ -42,6 +43,7 @@ Ouvrez ensuite l'adresse dans Safari, puis **Partager > Sur l'écran d'accueil**
 | --- | --- |
 | `MAISON_MOT_DE_PASSE` | Obligatoire : le tableau de bord montre votre caméra et votre agenda. |
 | `MAISON_HTTPS` | `1` derrière un hébergeur en HTTPS : cookie sécurisé et adresses correctes. |
+| `MAISON_VILLE` | Ville pour la météo, par exemple `Lyon`. |
 | `MAISON_AGENDA_ICAL` | Adresse(s) iCal secrète(s) de Google Agenda, séparées par des espaces. |
 | `SMARTLIFE_CLE`, `SMARTLIFE_SECRET` | Access ID et Access Secret du projet Tuya (voir plus bas). |
 | `SMARTLIFE_REGION` | Centre de données Tuya : `eu` pour l'Europe (par défaut). |

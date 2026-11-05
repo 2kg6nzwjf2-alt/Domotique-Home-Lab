@@ -5,6 +5,7 @@ L'appli Maison (tableau de bord et Garde-manger) tourne directement sur l'iPhone
 | Fonction | Dans Pythonista |
 | --- | --- |
 | Tâches (Rappels Apple) | lues directement ; touchez le rond pour cocher une tâche |
+| Météo | aujourd'hui et demain pour votre ville (Open-Meteo, gratuit, sans compte) |
 | Agenda du jour | calendrier de l'iPhone (ajoutez-y votre compte Google), ou adresse iCal de Google |
 | Alarme et caméra Smart Life | avec vos clés Tuya, rangées dans le trousseau de l'appareil |
 | Garde-manger | hors connexion ; placard et courses partagés par iCloud entre l'iPhone et l'iPad |
@@ -27,6 +28,7 @@ Pour avoir la dernière version plus tard, lancez **Mettre à jour.py** : vos do
 
 En bas du tableau de bord, la section **Réglages** permet de choisir :
 
+- la ville pour la météo ;
 - la liste Rappels qui sert de liste de courses (« Courses » par défaut) ;
 - l'adresse iCal de Google (facultative : sans elle, l'agenda lit le calendrier de l'iPhone) ;
 - les clés Smart Life (Access ID et Access Secret du projet Tuya) et les identifiants de l'alarme et de la caméra. Les étapes pour les obtenir sont dans le [README de Maison](../maison/README.md#relier-lalarme-et-la-caméra-smart-life).

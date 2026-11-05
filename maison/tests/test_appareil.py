@@ -170,3 +170,15 @@ def test_camera_non_configuree(appli):
     _, c, _, _ = appli
     assert c.appel("POST", "/api/camera/direct", {})[0] == 404
     assert c.appel("POST", "/garde-manger/api/claude/plat", {"nom": "x"})[0] == 503
+
+
+def test_meteo_dans_les_reglages(appli):
+    a, c, _, _ = appli
+    assert injecte(c.appel("GET", "/")[1], "MAISON")["meteo"] is False
+    assert c.json("POST", "/api/reglages", {"ville": "Lyon"})[1]["ville"] == "Lyon"
+    assert injecte(c.appel("GET", "/")[1], "MAISON")["meteo"] is True
+    sys.path.insert(0, os.path.join(ICI, "tests"))
+    from meteo import Meteo
+    from test_maison import FauxMeteoHTTP
+    a._meteo = Meteo("Lyon", session=FauxMeteoHTTP())
+    assert c.json("GET", "/api/tableau")[1]["meteo"]["jours"][1]["libelle"] == "Éclaircies"

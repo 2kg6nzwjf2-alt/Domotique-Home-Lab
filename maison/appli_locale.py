@@ -23,12 +23,13 @@ for chemin in (ICI, DOSSIER_GM):
 
 import donnees as donnees_gm  # noqa: E402  (garde-manger/donnees.py)
 from liens import soiree  # noqa: E402
+from meteo import ErreurMeteo, Meteo  # noqa: E402
 from smartlife import ErreurSmartLife, SmartLife  # noqa: E402
 from stockage import EtatTropGros, Stockage  # noqa: E402  (garde-manger/stockage.py)
 
 MARQUEUR_MAISON = "/*__MAISON__*/null"
 MARQUEUR_GM = "/*__GARDE_MANGER__*/null"
-REGLAGES_PUBLICS = ("smartlife_region", "smartlife_alarme", "smartlife_camera", "liste_courses")
+REGLAGES_PUBLICS = ("smartlife_region", "smartlife_alarme", "smartlife_camera", "liste_courses", "ville")
 
 
 def _json_page(valeur):
@@ -56,6 +57,7 @@ class Appli:
         if r.get("smartlife_cle") and r.get("smartlife_secret"):
             self._smartlife = SmartLife(r.get("smartlife_region") or "eu", r["smartlife_cle"], r["smartlife_secret"],
                                         r.get("smartlife_alarme"), r.get("smartlife_camera"))
+        self._meteo = Meteo.depuis_texte(r.get("ville"))
         self._agenda_ical = None
         if r.get("agenda_ical"):
             from agenda import Agenda  # bibliothèques installées par l'installeur ; seulement si une adresse iCal est donnée
@@ -106,6 +108,11 @@ class Appli:
         agenda = self.agenda()
         if agenda is not None:
             resultat["agenda"] = agenda
+        if self._meteo is not None:
+            try:
+                resultat["meteo"] = self._meteo.previsions()
+            except ErreurMeteo as e:
+                resultat["meteo"] = {"erreur": str(e)}
         if self._smartlife and self._smartlife.alarme_id:
             try:
                 resultat["alarme"] = self._smartlife.etat_alarme()
@@ -153,6 +160,7 @@ class Appli:
             "alarme": bool(self._smartlife and self._smartlife.alarme_id),
             "camera": bool(self._smartlife and self._smartlife.camera_id),
             "cocher": True,
+            "meteo": self._meteo is not None,
             "reglages": r,
         }
         return self.page_maison.replace(MARQUEUR_MAISON, _json_page(injecte))

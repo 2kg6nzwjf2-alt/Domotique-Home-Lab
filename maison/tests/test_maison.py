@@ -108,7 +108,7 @@ def faux_smartlife(**kw):
 @pytest.fixture
 def appli(tmp_path):
     def fabrique(**kw):
-        params = dict(dossier_donnees=str(tmp_path), mot_de_passe="", cle_raccourci=CLE, agenda=None, smartlife=None, claude=None)
+        params = dict(dossier_donnees=str(tmp_path), mot_de_passe="", cle_raccourci=CLE, agenda=None, smartlife=None, claude=None, meteo=None)
         params.update(kw)
         return create_app(**params).test_client()
     return fabrique
@@ -272,3 +272,49 @@ def test_trop_d_essais(appli):
         c.post("/connexion", data={"mot_de_passe": "non"})
     r = c.post("/connexion", data={"mot_de_passe": "secret"})
     assert "Trop d'essais" in r.get_data(as_text=True)
+
+
+# ---------- Météo ----------
+GEO = {"results": [{"name": "Lyon", "latitude": 45.75, "longitude": 4.85}]}
+PREV = {"current": {"temperature_2m": 12.4, "weather_code": 61},
+        "daily": {"time": ["2026-11-05", "2026-11-06"], "weather_code": [63, 2],
+                  "temperature_2m_max": [14.2, 16.8], "temperature_2m_min": [7.1, 6.0],
+                  "precipitation_probability_max": [80, 10]}}
+
+
+class FauxMeteoHTTP:
+    def __init__(self, geo=GEO, statut=200):
+        self.geo, self.statut, self.appels = geo, statut, []
+
+    def get(self, url, params=None, timeout=None):
+        import requests
+        self.appels.append((url, params))
+        r = requests.Response()
+        r.status_code = self.statut
+        r._content = json.dumps(self.geo if "geocoding" in url else PREV).encode()
+        return r
+
+
+def test_meteo():
+    from meteo import Meteo
+    http = FauxMeteoHTTP()
+    m = Meteo("Lyon", session=http).previsions()
+    assert m["lieu"] == "Lyon" and m["maintenant"] == {"temperature": 12.4, "libelle": "Pluie faible", "icone": "pluie"}
+    assert [j["libelle"] for j in m["jours"]] == ["Pluie", "Éclaircies"] and m["jours"][1]["min"] == 6.0 and m["jours"][0]["pluie"] == 80
+    params = http.appels[1][1]
+    assert params["latitude"] == 45.75 and params["forecast_days"] == 2
+    Meteo("Lyon", session=http)  # nouvelle instance : nouveau géocodage
+    assert len(http.appels) == 2
+
+
+def test_meteo_erreurs(appli):
+    from meteo import ErreurMeteo, Meteo
+    with pytest.raises(ErreurMeteo, match="introuvable"):
+        Meteo("Xyzzy", session=FauxMeteoHTTP(geo={"results": []})).previsions()
+    with pytest.raises(ErreurMeteo, match="injoignable"):
+        Meteo("Lyon", session=FauxMeteoHTTP(statut=500)).previsions()
+    assert Meteo.depuis_texte("  ") is None
+    c = appli(meteo=Meteo("Lyon", session=FauxMeteoHTTP()))
+    assert c.get("/api/tableau").get_json()["meteo"]["lieu"] == "Lyon"
+    c = appli(meteo=Meteo("Xyzzy", session=FauxMeteoHTTP(geo={})))
+    assert "introuvable" in c.get("/api/tableau").get_json()["meteo"]["erreur"]

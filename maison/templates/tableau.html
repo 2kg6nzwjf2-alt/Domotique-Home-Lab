@@ -59,6 +59,17 @@ button.dot:hover{border-color:var(--ok);background:var(--ok-soft)}
 .form input,.form select{font:inherit;font-weight:400;color:var(--ink);border:1.5px solid var(--line);background:var(--bg);border-radius:10px;padding:9px 11px;min-width:0}
 .form input:focus,.form select:focus{border-color:var(--accent);outline:none}
 .ok{color:var(--ok);font-weight:600}
+.meteo{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.jour{background:var(--bg);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.jour .nom{font-size:12.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.jour .ligne{display:flex;align-items:center;gap:10px}
+.jour svg{width:40px;height:40px;flex:none}
+.jour .temp{font-family:var(--f-mono);font-size:26px;font-weight:500;line-height:1;font-variant-numeric:tabular-nums}
+.jour .minmax{font-family:var(--f-mono);font-size:13px;color:var(--muted)}
+.jour .lib{font-size:14px;font-weight:500}
+.jour .pluie{font-size:12.5px;color:var(--accent)}
+.credit{font-size:11px;color:var(--muted);margin:0}
+.credit a{color:inherit}
 
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px;align-items:start}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px;min-width:0}
@@ -149,6 +160,11 @@ ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;m
 
   <div class="alerte-courses" id="alerteCourses" hidden></div>
   <main class="grid">
+    <section class="card" aria-labelledby="h-meteo">
+      <div class="head"><h2 id="h-meteo">Météo</h2><span class="hint" id="meteoLieu"></span></div>
+      <div id="meteo"><p class="hint dots">Chargement</p></div>
+    </section>
+
     <section class="card" aria-labelledby="h-agenda">
       <div class="head"><h2 id="h-agenda">Aujourd'hui</h2><span class="hint" id="agendaNb"></span></div>
       <div id="agenda"><p class="hint dots">Chargement</p></div>
@@ -389,6 +405,36 @@ document.querySelectorAll('[data-copy]').forEach(b => b.onclick = async () => {
   setTimeout(() => b.textContent = 'Copier', 1800);
 });
 
+// ---------- Météo (Open-Meteo) ----------
+const ICONES = {
+  soleil: '<circle cx="24" cy="24" r="9" fill="#f2b33d"/><g stroke="#f2b33d" stroke-width="3" stroke-linecap="round"><path d="M24 5v5M24 38v5M5 24h5M38 24h5M10.6 10.6l3.5 3.5M33.9 33.9l3.5 3.5M10.6 37.4l3.5-3.5M33.9 14.1l3.5-3.5"/></g>',
+  eclaircie: '<circle cx="18" cy="18" r="8" fill="#f2b33d"/><path d="M15 38h20a8 8 0 0 0 0-16 11 11 0 0 0-20.5 4A6 6 0 0 0 15 38z" fill="#c9d2e3"/>',
+  nuage: '<path d="M13 37h22a9 9 0 0 0 0-18 12 12 0 0 0-22.8 4.2A7 7 0 0 0 13 37z" fill="#aeb9cf"/>',
+  brouillard: '<path d="M13 28h22a8 8 0 0 0 0-16 11 11 0 0 0-21 4A6 6 0 0 0 13 28z" fill="#aeb9cf"/><g stroke="#8d99b3" stroke-width="3" stroke-linecap="round"><path d="M9 34h30M13 40h22"/></g>',
+  pluie: '<path d="M13 30h22a8 8 0 0 0 0-16 11 11 0 0 0-21 4A6 6 0 0 0 13 30z" fill="#aeb9cf"/><g stroke="#3d7bd9" stroke-width="3" stroke-linecap="round"><path d="M16 35l-2 6M24 35l-2 6M32 35l-2 6"/></g>',
+  neige: '<path d="M13 30h22a8 8 0 0 0 0-16 11 11 0 0 0-21 4A6 6 0 0 0 13 30z" fill="#aeb9cf"/><g fill="#7fb3f0"><circle cx="16" cy="38" r="2.4"/><circle cx="24" cy="41" r="2.4"/><circle cx="32" cy="38" r="2.4"/></g>',
+  orage: '<path d="M13 28h22a8 8 0 0 0 0-16 11 11 0 0 0-21 4A6 6 0 0 0 13 28z" fill="#8d99b3"/><path d="M25 28l-6 9h6l-3 8 9-11h-6l3-6z" fill="#f2b33d"/>',
+};
+const icone = nom => `<svg viewBox="0 0 48 48" aria-hidden="true">${ICONES[nom] || ICONES.nuage}</svg>`;
+const degres = v => v == null ? '–' : Math.round(v) + '°';
+function renderMeteo(m){
+  const box = $('#meteo');
+  if (!M.meteo){
+    box.innerHTML = APPAREIL ? '<div class="empty">Indiquez votre ville dans <b>Réglages</b>, en bas de la page.</div>' : '<div class="empty">Indiquez votre ville dans <code>MAISON_VILLE</code> (voir le README).</div>';
+    return;
+  }
+  if (!m || m.erreur){ box.innerHTML = `<p class="err">${esc(m?.erreur || 'Météo indisponible pour le moment.')}</p>`; return; }
+  $('#meteoLieu').textContent = m.lieu || '';
+  const [auj, dem] = m.jours || [];
+  const bloc = (nom, j, actuel) => j ? `<div class="jour"><span class="nom">${nom}</span>
+    <div class="ligne">${icone(actuel ? actuel.icone : j.icone)}<span class="temp">${degres(actuel ? actuel.temperature : j.max)}</span></div>
+    <span class="lib">${esc(actuel ? actuel.libelle : j.libelle)}</span>
+    <span class="minmax">${degres(j.min)} / ${degres(j.max)}</span>
+    ${j.pluie != null ? `<span class="pluie">Pluie ${Math.round(j.pluie)} %</span>` : ''}</div>` : '';
+  box.innerHTML = `<div class="meteo">${bloc('Maintenant', auj, m.maintenant)}${bloc('Demain', dem)}</div>
+    <p class="credit">Données <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></p>`;
+}
+
 // ---------- Résumé du jour et rappel des courses en partant ----------
 function renderResume(d){
   const morceaux = [];
@@ -399,6 +445,9 @@ function renderResume(d){
   if (retard) morceaux.push(`<b>${retard} tâche${retard>1?'s':''} en retard</b>`);
   const finir = d.garde_manger?.a_finir || [];
   if (finir.length) morceaux.push(`${esc(finir.slice(0,3).join(', ').toLowerCase())} à finir`);
+  const [auj, dem] = d.meteo?.jours || [];
+  if (auj?.pluie >= 60) morceaux.push(`pluie probable aujourd’hui (${Math.round(auj.pluie)} %)`);
+  else if (dem?.pluie >= 60) morceaux.push(`pluie probable demain (${Math.round(dem.pluie)} %)`);
   if (d.alarme?.niveau === 'alerte') morceaux.unshift('<b>Alarme déclenchée</b>');
   $('#resume').innerHTML = morceaux.join(' · ');
   $('#resume').hidden = !morceaux.length;
@@ -418,6 +467,7 @@ if (APPAREIL){
   reg.querySelector('summary').textContent = 'Réglages';
   reg.querySelector('div').innerHTML = `
     <form class="form" id="formReglages" autocomplete="off">
+      <label>Ville pour la météo<input id="r_ville" value="${esc(R.ville || '')}" placeholder="Ex. Lyon"></label>
       <label>Liste de courses dans Rappels<input id="r_liste" value="${esc(R.liste_courses || 'Courses')}"></label>
       <label>Adresse iCal Google (facultatif)<input id="r_ical" type="password" placeholder="${R.agenda_ical ? 'Enregistrée : laisser vide pour la garder' : 'Vide : calendrier de l’iPhone'}"></label>
       <label>Smart Life : Access ID<input id="r_cle" placeholder="${R.smartlife_relie ? 'Enregistré : laisser vide pour le garder' : 'iot.tuya.com > projet > Overview'}"></label>
@@ -434,7 +484,7 @@ if (APPAREIL){
     $('#r_msg').className = 'hint dots'; $('#r_msg').textContent = 'Enregistrement';
     try {
       const r = await fetch('api/reglages', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
-        liste_courses: v('r_liste'), agenda_ical: v('r_ical'), smartlife_cle: v('r_cle'), smartlife_secret: v('r_secret'),
+        ville: v('r_ville'), liste_courses: v('r_liste'), agenda_ical: v('r_ical'), smartlife_cle: v('r_cle'), smartlife_secret: v('r_secret'),
         smartlife_region: v('r_region'), smartlife_alarme: v('r_alarme'), smartlife_camera: v('r_camera')})});
       if (!r.ok) throw 0;
       $('#r_msg').className = 'ok'; $('#r_msg').textContent = 'Enregistré';
@@ -452,12 +502,12 @@ async function charger(){
     if (r.status === 401) { location.reload(); return; }
     if (!r.ok) throw new Error('HTTP ' + r.status);
     dernier = await r.json();
-    renderAgenda(dernier.agenda, dernier.rappels); renderTaches(dernier.rappels); renderAlarme(dernier.alarme); renderGm(dernier.garde_manger);
+    renderAgenda(dernier.agenda, dernier.rappels); renderTaches(dernier.rappels); renderAlarme(dernier.alarme); renderGm(dernier.garde_manger); renderMeteo(dernier.meteo);
     renderResume(dernier);
     $('#maj').textContent = 'Mis à jour à ' + heure(new Date());
   } catch {
     $('#maj').textContent = 'Serveur injoignable' + (dernier ? ' : dernières données affichées' : '');
-    if (!dernier){ renderAgenda(null); $('#taches').innerHTML = '<p class="err">Tâches indisponibles pour le moment.</p>'; renderAlarme({erreur:'Serveur injoignable'}); }
+    if (!dernier){ if (M.meteo) renderMeteo({erreur:'Météo indisponible pour le moment.'}); renderAgenda(null); $('#taches').innerHTML = '<p class="err">Tâches indisponibles pour le moment.</p>'; renderAlarme({erreur:'Serveur injoignable'}); }
   } finally { enCours = false; }
 }
 charger();

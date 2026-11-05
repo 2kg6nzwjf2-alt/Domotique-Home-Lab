@@ -27,6 +27,7 @@ from stockage import Stockage  # noqa: E402  (garde-manger/stockage.py)
 from agenda import Agenda  # noqa: E402
 from liens import soiree  # noqa: E402
 from rappels import Rappels, analyser_json, analyser_texte  # noqa: E402
+from meteo import ErreurMeteo, Meteo  # noqa: E402
 from smartlife import ErreurSmartLife, SmartLife  # noqa: E402
 
 MARQUEUR = "/*__MAISON__*/null"
@@ -63,7 +64,7 @@ class Redirection:
 
 
 def create_app(dossier_donnees=None, mot_de_passe=None, cle_raccourci=None, agenda="environnement",
-               smartlife="environnement", claude="environnement", fuseau=None, https=None):
+               smartlife="environnement", claude="environnement", fuseau=None, https=None, meteo="environnement"):
     env = os.environ
     dossier_donnees = dossier_donnees or env.get("MAISON_DONNEES") or os.path.join(DOSSIER, "donnees_utilisateur")
     os.makedirs(dossier_donnees, exist_ok=True)
@@ -74,6 +75,8 @@ def create_app(dossier_donnees=None, mot_de_passe=None, cle_raccourci=None, agen
         agenda = Agenda.depuis_texte(env.get("MAISON_AGENDA_ICAL"), fuseau)
     if smartlife == "environnement":
         smartlife = SmartLife.depuis_environnement(env)
+    if meteo == "environnement":
+        meteo = Meteo.depuis_texte(env.get("MAISON_VILLE"))
     cle_secrete = env.get("MAISON_CLE_SECRETE") or _lire_ou_creer(os.path.join(dossier_donnees, ".cle_secrete"), 32)
     cle_raccourci = cle_raccourci or env.get("MAISON_CLE_RACCOURCI") or _lire_ou_creer(os.path.join(dossier_donnees, ".cle_raccourci"), 24)
 
@@ -141,6 +144,7 @@ def create_app(dossier_donnees=None, mot_de_passe=None, cle_raccourci=None, agen
             "raccourci": {"nom": NOM_RACCOURCI, "adresse": request.host_url.rstrip("/") + url_for("recevoir_rappels"), "cle": cle_raccourci},
             "motDePasse": bool(mot_de_passe),
             "mode": "serveur",
+            "meteo": meteo is not None,
         }
         json_injecte = json.dumps(injecte, ensure_ascii=False).replace("</", "<\\/")
         reponse = Response(page.replace(MARQUEUR, json_injecte), mimetype="text/html")
@@ -155,6 +159,11 @@ def create_app(dossier_donnees=None, mot_de_passe=None, cle_raccourci=None, agen
     @app.get("/api/tableau")
     def donnees_tableau():
         resultat = {"rappels": rappels.lire()}
+        if meteo is not None:
+            try:
+                resultat["meteo"] = meteo.previsions()
+            except ErreurMeteo as e:
+                resultat["meteo"] = {"erreur": str(e)}
         if agenda is not None:
             try:
                 resultat["agenda"] = agenda.du_jour()

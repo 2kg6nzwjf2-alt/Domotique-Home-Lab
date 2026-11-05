@@ -1,0 +1,46 @@
+# Publie Garde-manger sur GitHub Pages à chaque modification de la branche main.
+# À activer une seule fois : Settings > Pages > Source : « GitHub Actions ».
+name: Publier sur GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  construire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Installer
+        run: pip install -r garde-manger/requirements-dev.txt
+      - name: Tester
+        run: python -m pytest -q garde-manger/tests
+      - name: Construire la page
+        run: python garde-manger/construire_page.py _site
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  publier:
+    needs: construire
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}garde-manger/
+    steps:
+      - id: deploiement
+        uses: actions/deploy-pages@v4

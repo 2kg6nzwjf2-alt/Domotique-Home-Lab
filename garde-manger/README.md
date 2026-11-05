@@ -4,7 +4,25 @@ Notez ce que vous avez dans vos placards : l'appli propose les plats que vous po
 
 Le serveur et les données sont en **Python** (Flask). L'interface s'ouvre dans Safari sur **iPhone et iPad**, et s'installe sur l'écran d'accueil comme une appli. Le placard, les ustensiles et la liste de courses sont gardés par le serveur : l'iPhone et l'iPad voient les mêmes.
 
-## Ce qu'il faut
+## Deux façons de l'utiliser
+
+| | Version en ligne (GitHub Pages) | Serveur Python à la maison |
+| --- | --- | --- |
+| Adresse | https://2kg6nzwjf2-alt.github.io/Domotique-Home-Lab/ | `http://<ordinateur>:5000` sur votre Wi-Fi |
+| Installation | aucune | Python sur un ordinateur allumé |
+| Placard partagé iPhone + iPad | non : chaque appareil garde le sien | oui |
+| Fonctions Claude | non | oui, avec votre clé API |
+| Hors connexion | oui, après une première ouverture | non |
+
+### Version en ligne (GitHub Pages)
+
+La page est construite par `construire_page.py` à partir de `donnees.py`, puis publiée par GitHub Actions (`.github/workflows/pages.yml`) à chaque modification de la branche `main`. Les tests doivent passer pour que la publication ait lieu.
+
+Activation, une seule fois : sur GitHub, ouvrez **Settings > Pages**, puis choisissez **GitHub Actions** dans « Source ». Relancez ensuite la publication depuis l'onglet **Actions** (« Publier sur GitHub Pages », puis **Run workflow**).
+
+Pour construire la page sur votre ordinateur : `python construire_page.py _site`.
+
+## Ce qu'il faut (serveur Python)
 
 - Un ordinateur (Mac, Windows ou Linux) ou un Raspberry Pi, avec **Python 3.10 ou plus récent**, allumé quand vous voulez utiliser l'appli.
 - L'iPhone ou l'iPad connecté au **même réseau Wi-Fi** que cet ordinateur.
@@ -79,6 +97,7 @@ L'appli peut tourner chez un hébergeur Python. Elle utilise la variable `PORT` 
 | `donnees.py` | Produits connus et carnet de recettes. Ajoutez vos recettes ici. |
 | `service_claude.py` | Consignes envoyées à Claude et lecture de ses réponses. |
 | `stockage.py` | Enregistrement de l'état dans un fichier JSON. |
+| `construire_page.py` | Construit la version statique pour GitHub Pages. |
 | `templates/index.html` | Interface affichée dans Safari. |
 | `static/` | Icônes et manifeste pour l'écran d'accueil. |
 | `tests/` | Tests automatiques. |

@@ -391,7 +391,8 @@ form.add{position:relative}
 </dialog>
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script>window.GM = /*__GARDE_MANGER__*/null;</script>
+<script>window.GM = /*__GARDE_MANGER__*/null;
+if (window.GM && GM.statique && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});</script>
 <script>
 (() => {
 // ---------- Ingrédients connus : clé, libellé, catégorie, alias ----------
@@ -538,14 +539,21 @@ const RECIPES = GM.donnees.recettes.map(([n,t,s,kind,v,ing,steps]) => ({
 }));
 
 // ---------- État (gardé dans ce navigateur) ----------
-// L'état est gardé par le serveur Python : l'iPhone et l'iPad partagent le même placard.
-const ETAT = GM.etat || {};
+// Avec le serveur Python, l'état est gardé par le serveur : l'iPhone et l'iPad partagent le même placard.
+// Sur GitHub Pages (version statique), il est gardé dans le navigateur de chaque appareil.
+const STATIQUE = !!GM.statique, CLE_LOCALE = 'garde-manger.etat';
+const ETAT = STATIQUE ? (() => { try { const v = JSON.parse(localStorage.getItem(CLE_LOCALE) || '{}'); return v && typeof v==='object' && !Array.isArray(v) ? v : {}; } catch { return {}; } })() : (GM.etat || {});
 let etatVersion = GM.version || 0, saveTimer = null, saving = false, dirty = false;
 const store = {
   get(k,d){ return Object.prototype.hasOwnProperty.call(ETAT, k) ? ETAT[k] : d; },
-  set(k,v){ ETAT[k] = v; dirty = true; clearTimeout(saveTimer); saveTimer = setTimeout(pushState, 500); }
+  set(k,v){ ETAT[k] = v; dirty = true; clearTimeout(saveTimer); saveTimer = setTimeout(pushState, STATIQUE ? 50 : 500); }
 };
 async function pushState(){
+  if (STATIQUE){
+    try { localStorage.setItem(CLE_LOCALE, JSON.stringify(ETAT)); dirty = false; }
+    catch { toast('Ce navigateur refuse d’enregistrer : sortez de la navigation privée.'); }
+    return;
+  }
   if (saving){ clearTimeout(saveTimer); saveTimer = setTimeout(pushState, 500); return; }
   saving = true; dirty = false;
   try {
@@ -561,7 +569,7 @@ async function pushState(){
 }
 // Retour sur l'appli : si un autre appareil a modifié le placard, on recharge.
 document.addEventListener('visibilitychange', async () => {
-  if (document.visibilityState!=='visible' || dirty || saving) return;
+  if (STATIQUE || document.visibilityState!=='visible' || dirty || saving) return;
   try { const r = await fetch('api/etat/version'); if (r.ok && (await r.json()).version > etatVersion) location.reload(); } catch {}
 });
 const EXAMPLE = [['oeuf',6,'pc'],['lait',1,'l'],['beurre',250,'g'],['farine',1,'kg'],['pomme-de-terre',1.5,'kg'],['oignon',3,'pc'],['pates',500,'g'],['tomates-concassees',1,'boite'],['fromage-rape',200,'g'],['lardons',100,'g'],['carotte',4,'pc'],['courgette',2,'pc']];

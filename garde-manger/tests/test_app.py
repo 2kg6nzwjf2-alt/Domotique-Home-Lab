@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import donnees  # noqa: E402
 from app import create_app  # noqa: E402
+from construire_page import construire  # noqa: E402
 from service_claude import ErreurClaude, consigne_idees, consigne_plat, lire_json  # noqa: E402
 
 
@@ -51,7 +52,7 @@ def client_claude(tmp_path, faux):
 
 def donnees_injectees(html):
     debut = html.index("window.GM = ") + len("window.GM = ")
-    fin = html.index(";</script>", debut)
+    fin = html.index(";\n", debut)
     return json.loads(html[debut:fin])
 
 
@@ -167,3 +168,18 @@ def test_consignes():
                            {"vegetarien": True, "type": "dessert"}, ["Crêpes"])
     assert "Œufs (6)" in texte and "À utiliser en priorité" in texte
     assert "végétarien ; uniquement des desserts" in texte and "Crêpes" in texte
+
+
+def test_page_statique_pour_github_pages(tmp_path):
+    appli = construire(str(tmp_path / "_site"))
+    html = open(os.path.join(appli, "index.html"), encoding="utf-8").read()
+    gm = donnees_injectees(html)
+    assert gm["statique"] is True and gm["claude"] is False and gm["etat"] == {}
+    assert len(gm["donnees"]["recettes"]) == len(donnees.RECETTES)
+    for fichier in ["manifest.webmanifest", "sw.js", "static/apple-touch-icon.png", "static/icone-512.png"]:
+        assert os.path.isfile(os.path.join(appli, fichier)), fichier
+    manifeste = json.load(open(os.path.join(appli, "manifest.webmanifest"), encoding="utf-8"))
+    # chemins relatifs : la page vit dans un sous-dossier de github.io
+    assert manifeste["start_url"] == "./" and not manifeste["icons"][0]["src"].startswith("/")
+    assert os.path.isfile(tmp_path / "_site" / ".nojekyll")
+    assert "garde-manger/" in open(tmp_path / "_site" / "index.html", encoding="utf-8").read()

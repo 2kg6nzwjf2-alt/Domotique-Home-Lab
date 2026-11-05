@@ -1,0 +1,5 @@
+**/__pycache__
+**/donnees_utilisateur
+**/.venv
+_site
+.git

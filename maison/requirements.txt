@@ -1,0 +1,6 @@
+-r ../garde-manger/requirements.txt
+requests>=2.32,<3
+icalendar>=6,<8
+recurring-ical-events>=3,<4
+tinytuya>=1.17,<2
+tzdata>=2024.1

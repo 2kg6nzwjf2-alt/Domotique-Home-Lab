@@ -55,7 +55,8 @@ def _liste_textes(valeur, nombre=40, longueur=80):
     return [_texte(v, longueur) for v in valeur[:nombre] if _texte(v, longueur)]
 
 
-def create_app(dossier_donnees=None, mot_de_passe=None, claude="environnement"):
+def create_app(dossier_donnees=None, mot_de_passe=None, claude="environnement", cle_secrete=None, retour=None):
+    """`cle_secrete` et `retour` servent quand Garde-manger est une sous-appli du tableau de bord Maison."""
     dossier_donnees = dossier_donnees or os.environ.get("GM_DOSSIER_DONNEES") or os.path.join(DOSSIER, "donnees_utilisateur")
     mot_de_passe = os.environ.get("GM_MOT_DE_PASSE") if mot_de_passe is None else mot_de_passe
     if claude == "environnement":
@@ -63,7 +64,7 @@ def create_app(dossier_donnees=None, mot_de_passe=None, claude="environnement"):
 
     app = Flask(__name__, static_folder="static", template_folder="templates")
     app.config.update(
-        SECRET_KEY=_cle_secrete(dossier_donnees),
+        SECRET_KEY=cle_secrete or _cle_secrete(dossier_donnees),
         MAX_CONTENT_LENGTH=8 * 1024 * 1024,
         PERMANENT_SESSION_LIFETIME=timedelta(days=365),
         SESSION_COOKIE_SAMESITE="Lax",
@@ -107,6 +108,7 @@ def create_app(dossier_donnees=None, mot_de_passe=None, claude="environnement"):
             "etat": etat,
             "version": version,
             "claude": claude is not None,
+            "retour": retour,
         }
         # « </ » échappé pour qu'aucun texte ne puisse fermer la balise <script>
         json_injecte = json.dumps(injecte, ensure_ascii=False).replace("</", "<\\/")

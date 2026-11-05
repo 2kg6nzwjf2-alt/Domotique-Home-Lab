@@ -54,6 +54,7 @@ button{cursor:pointer}
 
 /* header */
 .top{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.retour{align-self:flex-start;color:var(--enamel);font-weight:600;text-decoration:none;font-size:15px;padding:4px 0}
 .pot{width:46px;height:46px;flex:none}
 .top h1{font-family:var(--f-display);font-weight:800;font-size:clamp(26px,4vw,34px);letter-spacing:-.02em;line-height:1;margin:0;text-wrap:balance}
 .top p{margin:4px 0 0;color:var(--muted);max-width:60ch}
@@ -248,6 +249,7 @@ form.add{position:relative}
 </style>
 
 <div class="wrap">
+  <a class="retour" id="retour" href="../" hidden>‹ Maison</a>
   <header class="top">
     <svg class="pot" viewBox="0 0 48 48" aria-hidden="true">
       <rect x="2" y="20" width="9" height="4" rx="2" fill="var(--enamel)"/>
@@ -392,6 +394,7 @@ form.add{position:relative}
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script>window.GM = /*__GARDE_MANGER__*/null;
+if (window.GM && GM.retour) document.addEventListener('DOMContentLoaded', () => { const a = document.getElementById('retour'); a.href = GM.retour; a.hidden = false; });
 if (window.GM && GM.statique && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});</script>
 <script>
 (() => {

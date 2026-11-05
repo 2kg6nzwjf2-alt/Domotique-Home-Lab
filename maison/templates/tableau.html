@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Maison">
+<meta name="theme-color" content="#f3f5f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0d1422" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="static/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="static/icone-192.png">
+<title>Maison</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout : en-tête (date, heure), puis une grille de cartes : agenda, tâches, maison, garde-manger. 1 colonne sur iPhone, 2 à 3 sur iPad. */
+:root{
+  --bg:#f3f5f9; --surface:#ffffff; --ink:#14213a; --muted:#5a6680; --line:#d8deea;
+  --accent:#1c4da1; --accent-ink:#ffffff; --accent-soft:#e4ebf9;
+  --ok:#2c7a4b; --ok-soft:#e1f1e7; --warn:#a86c12; --warn-soft:#fbefd9; --bad:#bf3f2b; --bad-soft:#fbe6e2;
+  --shadow:0 1px 2px rgba(20,33,58,.06),0 4px 14px rgba(20,33,58,.06);
+  --f-display:'Bricolage Grotesque','Avenir Next','Segoe UI',system-ui,sans-serif;
+  --f-body:'Figtree','Segoe UI',system-ui,-apple-system,sans-serif;
+  --f-mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0d1422; --surface:#151f35; --ink:#e6ebf5; --muted:#99a5bd; --line:#2a3756;
+  --accent:#86a8ee; --accent-ink:#0d1422; --accent-soft:#1c2b4f;
+  --ok:#6fc893; --ok-soft:#163224; --warn:#e9b65e; --warn-soft:#3a2b11; --bad:#f08c79; --bad-soft:#3a1d19;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.25); color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.top h1{font-family:var(--f-display);font-weight:800;font-size:clamp(28px,5vw,38px);letter-spacing:-.02em;line-height:1;margin:0}
+.top .date{color:var(--muted);margin:6px 0 0;font-size:16px}
+.clock{font-family:var(--f-mono);font-size:clamp(30px,6vw,44px);font-weight:500;font-variant-numeric:tabular-nums;line-height:1}
+.maj{font-size:12.5px;color:var(--muted);text-align:right;margin-top:4px}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px;align-items:start}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px;min-width:0}
+.card h2{font-family:var(--f-display);font-weight:800;font-size:19px;margin:0;letter-spacing:-.01em}
+.head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.hint{color:var(--muted);font-size:13px;margin:0}
+.eyebrow{font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;margin:0}
+.btn{border:0;border-radius:10px;padding:9px 14px;font-weight:600;background:var(--accent);color:var(--accent-ink);text-decoration:none;display:inline-block;white-space:nowrap}
+.btn.ghost{background:transparent;color:var(--accent);box-shadow:inset 0 0 0 1.5px var(--accent-soft)}
+.btn.small{padding:6px 10px;font-size:13px;border-radius:8px}
+.empty{border:1.5px dashed var(--line);border-radius:12px;padding:16px;color:var(--muted);font-size:14px}
+.err{color:var(--bad);font-size:13.5px;margin:0}
+
+/* agenda */
+.allday{display:flex;flex-wrap:wrap;gap:6px}
+.allday span{background:var(--accent-soft);border-radius:8px;padding:4px 10px;font-size:14px;font-weight:500}
+.events{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.events li{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;padding:9px 0;border-top:1px solid var(--line)}
+.events li:first-child{border-top:0}
+.events .h{font-family:var(--f-mono);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;padding-top:2px}
+.events .t{font-weight:600;min-width:0;overflow-wrap:anywhere}
+.events small{display:block;color:var(--muted);font-weight:400;font-size:13px}
+.events li.passe{opacity:.5}
+.events li.encours{background:var(--accent-soft);border-radius:10px;padding-inline:8px;margin-inline:-8px;border-top-color:transparent}
+.events li.encours .h{color:var(--accent);font-weight:600}
+
+/* tâches */
+.lists{display:flex;flex-direction:column;gap:14px}
+.list h3{margin:0 0 4px;font-size:14px;display:flex;gap:8px;align-items:baseline}
+.count{font-family:var(--f-mono);font-size:12px;color:var(--muted);font-weight:500}
+.tasks{list-style:none;margin:0;padding:0}
+.tasks li{display:flex;gap:10px;align-items:flex-start;padding:6px 0}
+.tasks .dot{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--line);flex:none;margin-top:3px}
+.tasks .t{min-width:0;flex:1;overflow-wrap:anywhere}
+.tasks .due{font-size:12.5px;color:var(--muted);white-space:nowrap}
+.tasks li.retard .due{color:var(--bad);font-weight:600}
+.tasks li.retard .dot{border-color:var(--bad)}
+.tasks li.jour .due{color:var(--warn);font-weight:600}
+.more{background:none;border:0;padding:2px 0;color:var(--accent);font-weight:600;font-size:13.5px}
+
+/* maison */
+.alarm{display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;background:var(--bg)}
+.alarm .pastille{width:14px;height:14px;border-radius:50%;background:var(--muted);flex:none}
+.alarm.off .pastille{background:var(--ok)} .alarm.on .pastille{background:var(--warn)}
+.alarm.alerte{background:var(--bad-soft)} .alarm.alerte .pastille{background:var(--bad);animation:pulse 1s ease-in-out infinite}
+.alarm b{font-size:17px;display:block}
+.alarm small{color:var(--muted);font-size:12.5px}
+@keyframes pulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.alarm.alerte .pastille{animation:none}}
+.cam{position:relative;aspect-ratio:16/9;max-width:100%;border-radius:12px;overflow:hidden;background:#0b1020;display:grid;place-items:center}
+.cam video{width:100%;height:100%;object-fit:contain;background:#000}
+.cam .over{position:absolute;inset:0;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;color:#e6ebf5;text-align:center;padding:12px}
+.cam .over p{margin:0;font-size:13px;color:#b9c3d8}
+.dots::after{content:"";display:inline-block;width:1.2em;text-align:left;animation:dots 1.2s steps(4) infinite}
+@keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+
+/* garde-manger */
+a.app{display:flex;gap:14px;align-items:center;text-decoration:none;color:inherit;padding:4px 0}
+a.app img{width:56px;height:56px;border-radius:14px;flex:none}
+a.app b{font-family:var(--f-display);font-size:18px;display:block}
+a.app span{color:var(--muted);font-size:13.5px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips span{background:var(--bg);border-radius:999px;padding:4px 10px;font-size:13px}
+.chips span.urg{background:var(--warn-soft);color:var(--warn);font-weight:600}
+
+/* réglages */
+details.reglages summary{cursor:pointer;font-weight:600;color:var(--accent)}
+details.reglages[open] summary{margin-bottom:12px}
+.copy{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.copy code{font-family:var(--f-mono);font-size:13px;background:var(--bg);padding:6px 8px;border-radius:8px;overflow-wrap:anywhere;flex:1;min-width:0}
+ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;max-width:70ch}
+</style>
+</head>
+<body>
+<script>window.MAISON = /*__MAISON__*/null;</script>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Maison</h1>
+      <p class="date" id="date"></p>
+    </div>
+    <div>
+      <div class="clock" id="clock" aria-live="off"></div>
+      <div class="maj" id="maj"></div>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="card" aria-labelledby="h-agenda">
+      <div class="head"><h2 id="h-agenda">Aujourd'hui</h2><span class="hint" id="agendaNb"></span></div>
+      <div id="agenda"><p class="hint dots">Chargement</p></div>
+    </section>
+
+    <section class="card" aria-labelledby="h-taches">
+      <div class="head">
+        <h2 id="h-taches">Tâches</h2>
+        <a class="btn ghost small" id="sync" href="#">Synchroniser</a>
+      </div>
+      <p class="hint" id="tachesMaj"></p>
+      <div id="taches"><p class="hint dots">Chargement</p></div>
+    </section>
+
+    <section class="card" aria-labelledby="h-maison">
+      <div class="head"><h2 id="h-maison">Sécurité</h2></div>
+      <div id="alarme"></div>
+      <div id="camBox">
+        <div class="cam" id="cam">
+          <div class="over" id="camOver">
+            <button class="btn" type="button" id="camGo">Voir en direct</button>
+            <p>La vidéo s'arrête seule après 5 minutes.</p>
+          </div>
+        </div>
+        <div class="head" style="margin-top:8px"><span class="hint" id="camMsg"></span><button class="btn ghost small" type="button" id="camStop" hidden>Arrêter</button></div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="h-gm">
+      <a class="app" href="garde-manger/">
+        <img src="garde-manger/static/apple-touch-icon.png" alt="">
+        <div><b id="h-gm">Garde-manger</b><span>Recettes avec ce que vous avez, pas à pas et courses</span></div>
+      </a>
+      <div id="gm"></div>
+    </section>
+  </main>
+
+  <section class="card">
+    <details class="reglages" id="reglages">
+      <summary>Réglages et Raccourci des rappels</summary>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div>
+          <p class="eyebrow">Adresse à mettre dans le Raccourci</p>
+          <div class="copy"><code id="rcUrl"></code><button class="btn ghost small" type="button" data-copy="rcUrl">Copier</button></div>
+        </div>
+        <div>
+          <p class="eyebrow">Clé (en-tête X-Cle)</p>
+          <div class="copy"><code id="rcCle"></code><button class="btn ghost small" type="button" data-copy="rcCle">Copier</button></div>
+        </div>
+        <ol class="steps">
+          <li>Dans l'appli <b>Raccourcis</b>, créez un raccourci nommé « <span id="rcNom"></span> ».</li>
+          <li>Ajoutez <b>Rechercher des rappels</b>, avec le filtre : <i>N'est pas terminé</i>.</li>
+          <li>Ajoutez <b>Répéter avec chaque élément</b>. Dedans, ajoutez <b>Texte</b> : <code>Liste | Titre | Date d'échéance</code>, en touchant chaque mot pour choisir la variable de l'élément répété (format de la date : ISO 8601).</li>
+          <li>Après la boucle, ajoutez <b>Combiner le texte</b> avec <i>Nouvelles lignes</i>.</li>
+          <li>Ajoutez <b>Obtenir le contenu de l'URL</b> : l'adresse ci-dessus, méthode <b>POST</b>, en-tête <code>X-Cle</code> = la clé ci-dessus, corps <b>Formulaire</b> avec le champ <code>texte</code> = le texte combiné.</li>
+          <li>Dans l'onglet <b>Automatisation</b>, lancez ce raccourci quand l'appli <b>Rappels</b> est fermée, et chaque matin. Choisissez « Exécuter immédiatement ».</li>
+        </ol>
+        <form method="post" action="deconnexion" id="deco" hidden><button class="btn ghost small" type="submit">Se déconnecter</button></form>
+      </div>
+    </details>
+  </section>
+</div>
+
+<script>
+(() => {
+const M = window.MAISON || {};
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const TZ = M.fuseau || 'Europe/Paris';
+const fmt = (opts, d=new Date()) => new Intl.DateTimeFormat('fr-FR', {timeZone:TZ, ...opts}).format(d);
+const heure = d => fmt({hour:'2-digit', minute:'2-digit'}, d);
+const jourCle = d => fmt({year:'numeric', month:'2-digit', day:'2-digit'}, d);
+
+function horloge(){
+  $('#clock').textContent = heure(new Date());
+  const d = fmt({weekday:'long', day:'numeric', month:'long'});
+  $('#date').textContent = d.charAt(0).toUpperCase() + d.slice(1);
+}
+horloge(); setInterval(horloge, 15000);
+
+function ilya(iso){
+  if (!iso) return '';
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 90) return 'à l’instant';
+  if (s < 3600) return `il y a ${Math.round(s/60)} min`;
+  if (s < 86400) return `il y a ${Math.round(s/3600)} h`;
+  return `le ${fmt({day:'numeric', month:'long'}, new Date(iso))}`;
+}
+
+// ---------- Agenda ----------
+function renderAgenda(a){
+  const box = $('#agenda');
+  if (!M.agenda){ box.innerHTML = '<div class="empty">Agenda Google pas encore relié. Ajoutez son adresse iCal secrète dans <code>MAISON_AGENDA_ICAL</code> (voir le README).</div>'; return; }
+  if (!a){ box.innerHTML = '<p class="err">Agenda indisponible pour le moment.</p>'; return; }
+  const evs = a.evenements || [], now = Date.now();
+  const allday = evs.filter(e => e.journee), timed = evs.filter(e => !e.journee);
+  const plusieurs = new Set(evs.map(e => e.agenda)).size > 1;
+  $('#agendaNb').textContent = evs.length ? `${evs.length} événement${evs.length>1?'s':''}` : '';
+  let html = (a.erreurs||[]).map(e => `<p class="err">${esc(e)}</p>`).join('');
+  if (allday.length) html += `<div class="allday">${allday.map(e => `<span>${esc(e.titre)}</span>`).join('')}</div>`;
+  if (timed.length){
+    html += '<ul class="events">' + timed.map(e => {
+      const d = new Date(e.debut), f = e.fin ? new Date(e.fin) : d;
+      const cls = f.getTime() <= now ? 'passe' : d.getTime() <= now ? 'encours' : '';
+      const sous = [e.lieu, plusieurs ? e.agenda : ''].filter(Boolean).join(' · ');
+      return `<li class="${cls}"><span class="h">${heure(d)}${e.fin ? '–' + heure(f) : ''}</span><span class="t">${esc(e.titre)}${cls==='encours'?' <small>en cours</small>':''}${sous?`<small>${esc(sous)}</small>`:''}</span></li>`;
+    }).join('') + '</ul>';
+  }
+  if (!evs.length) html += '<div class="empty">Rien de prévu aujourd’hui.</div>';
+  box.innerHTML = html;
+}
+
+// ---------- Tâches (Rappels Apple) ----------
+const ouverts = new Set();
+function echeance(r){
+  if (!r.echeance) return {txt:'', cls:'', ordre:Infinity};
+  const d = new Date(r.echeance), aujour = jourCle(new Date()), j = jourCle(d);
+  const demain = jourCle(new Date(Date.now() + 86400000));
+  const t = d.getTime();
+  if (r.journee ? j < aujour : t < Date.now()) return {txt: j===aujour ? `en retard · ${heure(d)}` : `en retard · ${fmt({day:'numeric', month:'short'}, d)}`, cls:'retard', ordre:t};
+  if (j === aujour) return {txt: r.journee ? 'aujourd’hui' : `aujourd’hui ${heure(d)}`, cls:'jour', ordre:t};
+  if (j === demain) return {txt: r.journee ? 'demain' : `demain ${heure(d)}`, cls:'', ordre:t};
+  return {txt: fmt({weekday:'short', day:'numeric', month:'short'}, d), cls:'', ordre:t};
+}
+function renderTaches(data){
+  const box = $('#taches');
+  const liste = data?.rappels || [];
+  $('#tachesMaj').textContent = data?.recu ? `Rappels Apple, synchronisés ${ilya(data.recu)}.` : '';
+  if (!data?.recu){
+    box.innerHTML = '<div class="empty">Vos rappels n’ont encore jamais été envoyés. Installez le Raccourci : <button type="button" class="more" id="voirReglages">voir les étapes</button>.</div>';
+    $('#voirReglages').onclick = () => { $('#reglages').open = true; $('#reglages').scrollIntoView({behavior:'smooth'}); };
+    return;
+  }
+  if (!liste.length){ box.innerHTML = '<div class="empty">Aucun rappel en cours. Tout est fait !</div>'; return; }
+  const groupes = new Map();
+  for (const r of liste){ if (!groupes.has(r.liste)) groupes.set(r.liste, []); groupes.get(r.liste).push({...r, e:echeance(r)}); }
+  const noms = [...groupes.keys()].sort((a,b) => a.localeCompare(b, 'fr'));
+  box.innerHTML = '<div class="lists">' + noms.map(nom => {
+    const items = groupes.get(nom).sort((a,b) => a.e.ordre - b.e.ordre);
+    const max = ouverts.has(nom) ? items.length : 6;
+    return `<div class="list"><h3>${esc(nom)} <span class="count">${items.length}</span></h3><ul class="tasks">${items.slice(0,max).map(r =>
+      `<li class="${r.e.cls}"><span class="dot" aria-hidden="true"></span><span class="t">${esc(r.titre)}</span>${r.e.txt?`<span class="due">${esc(r.e.txt)}</span>`:''}</li>`).join('')}</ul>
+      ${items.length>max?`<button type="button" class="more" data-liste="${esc(nom)}">Voir les ${items.length-max} autres</button>`:''}</div>`;
+  }).join('') + '</div>';
+  box.querySelectorAll('[data-liste]').forEach(b => b.onclick = () => { ouverts.add(b.dataset.liste); renderTaches(data); });
+}
+$('#sync').href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(M.raccourci?.nom || 'Envoyer mes rappels');
+
+// ---------- Alarme ----------
+function renderAlarme(a){
+  const box = $('#alarme');
+  if (!M.alarme){ box.innerHTML = '<div class="empty">Alarme Smart Life pas encore reliée (voir le README : <code>SMARTLIFE_ALARME_ID</code>).</div>'; return; }
+  if (!a || a.erreur){ box.innerHTML = `<div class="alarm"><span class="pastille"></span><div><b>Alarme : état inconnu</b><small>${esc(a?.erreur || 'Smart Life ne répond pas')}</small></div></div>`; return; }
+  const horsLigne = a.en_ligne === false;
+  box.innerHTML = `<div class="alarm ${horsLigne ? '' : a.niveau}" role="status"><span class="pastille" aria-hidden="true"></span><div><b>Alarme : ${esc(horsLigne ? 'hors ligne' : a.libelle)}</b><small>Smart Life · ${a.lu ? 'lu à ' + heure(new Date(a.lu*1000)) : ''}</small></div></div>`;
+}
+
+// ---------- Caméra (direct HLS) ----------
+let video = null, arret = null;
+function stopCam(msg){
+  clearTimeout(arret);
+  if (video){ video.pause(); video.removeAttribute('src'); video.load(); video.hls?.destroy(); video.remove(); video = null; }
+  $('#camOver').hidden = false; $('#camStop').hidden = true; $('#camGo').disabled = false;
+  $('#camMsg').textContent = msg || '';
+}
+function chargerHls(){
+  return window.Hls ? Promise.resolve(window.Hls) : new Promise((ok, ko) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js';
+    s.onload = () => ok(window.Hls); s.onerror = ko; document.head.append(s);
+  });
+}
+$('#camGo').onclick = async () => {
+  $('#camGo').disabled = true; $('#camMsg').className = 'hint dots'; $('#camMsg').textContent = 'Connexion à la caméra';
+  try {
+    const r = await fetch('api/camera/direct', {method:'POST'});
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 401) { location.reload(); return; }
+    if (!r.ok) throw new Error(j.message || 'Smart Life ne répond pas');
+    video = document.createElement('video');
+    Object.assign(video, {muted:true, autoplay:true, controls:true, playsInline:true});
+    video.setAttribute('playsinline', '');
+    $('#cam').prepend(video);
+    if (video.canPlayType('application/vnd.apple.mpegurl')) video.src = j.url;
+    else {
+      const Hls = await chargerHls();
+      if (!Hls?.isSupported()) throw new Error('Ce navigateur ne lit pas la vidéo en direct. Utilisez Safari.');
+      video.hls = new Hls(); video.hls.loadSource(j.url); video.hls.attachMedia(video);
+    }
+    video.onerror = () => stopCam('La vidéo n’a pas pu être lue. Réessayez.');
+    $('#camOver').hidden = true; $('#camStop').hidden = false;
+    $('#camMsg').className = 'hint'; $('#camMsg').textContent = 'En direct';
+    arret = setTimeout(() => stopCam('Vidéo arrêtée après 5 minutes.'), 5*60*1000);
+  } catch (e) {
+    stopCam(); $('#camMsg').className = 'err'; $('#camMsg').textContent = e.message || 'La caméra ne répond pas.';
+  }
+};
+$('#camStop').onclick = () => stopCam();
+if (!M.camera){ $('#camBox').innerHTML = '<div class="empty">Caméra Smart Life pas encore reliée (voir le README : <code>SMARTLIFE_CAMERA_ID</code>).</div>'; }
+
+// ---------- Garde-manger ----------
+function renderGm(g){
+  const box = $('#gm');
+  if (!g){ box.innerHTML = ''; return; }
+  let html = '';
+  if (g.courses?.length) html += `<p class="eyebrow">Liste de courses · ${g.courses.length}</p><div class="chips">${g.courses.slice(0,12).map(c=>`<span>${esc(c)}</span>`).join('')}${g.courses.length>12?`<span>+${g.courses.length-12}</span>`:''}</div>`;
+  if (g.a_finir?.length) html += `<p class="eyebrow">À finir vite</p><div class="chips">${g.a_finir.map(c=>`<span class="urg">${esc(c)}</span>`).join('')}</div>`;
+  if (!html) html = `<p class="hint">${g.placard ? `${g.placard} produit${g.placard>1?'s':''} dans le placard. Aucune course en attente.` : 'Ouvrez Garde-manger pour remplir votre placard.'}</p>`;
+  box.innerHTML = html;
+}
+
+// ---------- Réglages ----------
+$('#rcUrl').textContent = M.raccourci?.adresse || '';
+$('#rcCle').textContent = M.raccourci?.cle || '';
+$('#rcNom').textContent = M.raccourci?.nom || '';
+$('#deco').hidden = !M.motDePasse;
+document.querySelectorAll('[data-copy]').forEach(b => b.onclick = async () => {
+  const el = document.getElementById(b.dataset.copy);
+  try { await navigator.clipboard.writeText(el.textContent); b.textContent = 'Copié'; }
+  catch { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = 'Sélectionné'; }
+  setTimeout(() => b.textContent = 'Copier', 1800);
+});
+
+// ---------- Mise à jour ----------
+let enCours = false, dernier = null;
+async function charger(){
+  if (enCours) return; enCours = true;
+  try {
+    const r = await fetch('api/tableau', {cache:'no-store'});
+    if (r.status === 401) { location.reload(); return; }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    dernier = await r.json();
+    renderAgenda(dernier.agenda); renderTaches(dernier.rappels); renderAlarme(dernier.alarme); renderGm(dernier.garde_manger);
+    $('#maj').textContent = 'Mis à jour à ' + heure(new Date());
+  } catch {
+    $('#maj').textContent = 'Serveur injoignable' + (dernier ? ' : dernières données affichées' : '');
+    if (!dernier){ renderAgenda(null); $('#taches').innerHTML = '<p class="err">Tâches indisponibles pour le moment.</p>'; renderAlarme({erreur:'Serveur injoignable'}); }
+  } finally { enCours = false; }
+}
+charger();
+setInterval(() => { if (document.visibilityState === 'visible') charger(); }, 60000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') charger(); else stopCam(); });
+})();
+</script>
+</body>
+</html>

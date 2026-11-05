@@ -49,14 +49,26 @@ def _personnes(valeur):
         return 2
 
 
+def _soiree(fonction):
+    if fonction is None:
+        return None
+    try:
+        return fonction()
+    except Exception:  # l'agenda ne doit jamais empêcher d'ouvrir Garde-manger
+        return None
+
+
 def _liste_textes(valeur, nombre=40, longueur=80):
     if not isinstance(valeur, list):
         return []
     return [_texte(v, longueur) for v in valeur[:nombre] if _texte(v, longueur)]
 
 
-def create_app(dossier_donnees=None, mot_de_passe=None, claude="environnement", cle_secrete=None, retour=None):
-    """`cle_secrete` et `retour` servent quand Garde-manger est une sous-appli du tableau de bord Maison."""
+def create_app(dossier_donnees=None, mot_de_passe=None, claude="environnement", cle_secrete=None, retour=None, soiree=None):
+    """`cle_secrete`, `retour` et `soiree` servent quand Garde-manger est une sous-appli du tableau de bord Maison.
+
+    `soiree` : fonction sans argument qui renvoie le repas dehors ou la soirée chargée du jour (ou None).
+    """
     dossier_donnees = dossier_donnees or os.environ.get("GM_DOSSIER_DONNEES") or os.path.join(DOSSIER, "donnees_utilisateur")
     mot_de_passe = os.environ.get("GM_MOT_DE_PASSE") if mot_de_passe is None else mot_de_passe
     if claude == "environnement":
@@ -109,6 +121,7 @@ def create_app(dossier_donnees=None, mot_de_passe=None, claude="environnement", 
             "version": version,
             "claude": claude is not None,
             "retour": retour,
+            "soiree": _soiree(soiree),
         }
         # « </ » échappé pour qu'aucun texte ne puisse fermer la balise <script>
         json_injecte = json.dumps(injecte, ensure_ascii=False).replace("</", "<\\/")

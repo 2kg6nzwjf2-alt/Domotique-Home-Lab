@@ -7,6 +7,8 @@ elle n'arme ni ne désarme jamais l'alarme.
 import threading
 import time
 
+from tuya_cloud import TuyaCloud
+
 DUREE_CACHE_ALARME = 15  # secondes
 
 # Codes usuels des centrales d'alarme Tuya (catégorie « mal »)
@@ -28,7 +30,7 @@ class ErreurSmartLife(Exception):
 
 
 def _verifier(reponse, quoi):
-    """tinytuya renvoie un dictionnaire d'erreur au lieu de lever une exception."""
+    """Tuya renvoie {"success": false, "msg": …} au lieu d'une erreur HTTP."""
     if not isinstance(reponse, dict):
         raise ErreurSmartLife(f"{quoi} : réponse vide de Tuya")
     if reponse.get("success") is True:
@@ -70,11 +72,7 @@ class SmartLife:
             if self._fabrique:
                 self._cloud = self._fabrique()
             else:
-                import tinytuya
-                try:
-                    self._cloud = tinytuya.Cloud(apiRegion=self.region, apiKey=self.cle, apiSecret=self.secret)
-                except Exception as e:
-                    raise ErreurSmartLife(f"Connexion à Tuya : Smart Life injoignable ({type(e).__name__})", "reseau") from e
+                self._cloud = TuyaCloud(self.region, self.cle, self.secret)
             if getattr(self._cloud, "error", None):
                 erreur, self._cloud = self._cloud.error, None
                 _verifier(erreur if isinstance(erreur, dict) else {"msg": str(erreur)}, "Connexion à Tuya")
@@ -86,7 +84,7 @@ class SmartLife:
             return _verifier(self._client().cloudrequest(url, **kw), quoi)
         except ErreurSmartLife:
             raise
-        except Exception as e:  # requests, json… : tinytuya ne filtre pas les erreurs réseau
+        except Exception as e:  # coupure réseau, délai dépassé…
             self._cloud = None
             raise ErreurSmartLife(f"{quoi} : Smart Life injoignable ({type(e).__name__})", "reseau") from e
 

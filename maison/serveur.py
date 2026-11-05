@@ -25,6 +25,7 @@ import app as garde_manger  # noqa: E402  (garde-manger/app.py)
 from stockage import Stockage  # noqa: E402  (garde-manger/stockage.py)
 
 from agenda import Agenda  # noqa: E402
+from liens import soiree  # noqa: E402
 from rappels import Rappels, analyser_json, analyser_texte  # noqa: E402
 from smartlife import ErreurSmartLife, SmartLife  # noqa: E402
 
@@ -139,6 +140,7 @@ def create_app(dossier_donnees=None, mot_de_passe=None, cle_raccourci=None, agen
             "camera": bool(smartlife and smartlife.camera_id),
             "raccourci": {"nom": NOM_RACCOURCI, "adresse": request.host_url.rstrip("/") + url_for("recevoir_rappels"), "cle": cle_raccourci},
             "motDePasse": bool(mot_de_passe),
+            "mode": "serveur",
         }
         json_injecte = json.dumps(injecte, ensure_ascii=False).replace("</", "<\\/")
         reponse = Response(page.replace(MARQUEUR, json_injecte), mimetype="text/html")
@@ -207,7 +209,8 @@ def create_app(dossier_donnees=None, mot_de_passe=None, cle_raccourci=None, agen
 
     # ---------- Sous-appli Garde-manger ----------
     sous_appli = garde_manger.create_app(dossier_donnees=dossier_gm, mot_de_passe=mot_de_passe, claude=claude,
-                                         cle_secrete=cle_secrete, retour="../")
+                                         cle_secrete=cle_secrete, retour="../",
+                                         soiree=(lambda: soiree(agenda.du_jour()["evenements"])) if agenda else None)
     sous_appli.config.update(SESSION_COOKIE_SECURE=https, PERMANENT_SESSION_LIFETIME=timedelta(days=90))
 
     @sous_appli.before_request

@@ -344,6 +344,7 @@ form.add{position:relative}
         <div class="grid" id="aiGrid"></div>
       </section>
 
+      <div class="banner" id="soiree" hidden></div>
       <div class="filters" role="group" aria-label="Filtres">
         <div class="stepper" role="group" aria-label="Nombre de personnes">
           <button type="button" id="pMinus" aria-label="Une personne de moins">−</button>
@@ -395,6 +396,16 @@ form.add{position:relative}
 
 <script>window.GM = /*__GARDE_MANGER__*/null;
 if (window.GM && GM.retour) document.addEventListener('DOMContentLoaded', () => { const a = document.getElementById('retour'); a.href = GM.retour; a.hidden = false; });
+// Ce soir, d'après l'agenda : repas dehors ou soirée chargée
+if (window.GM && GM.soiree) document.addEventListener('DOMContentLoaded', () => {
+  const b = document.getElementById('soiree'), s = GM.soiree, t = String(s.titre).replace(/[<>&"]/g, '');
+  if (s.type === 'dehors') b.innerHTML = `<span>Ce soir : <b>${t}</b> à ${s.heure}. Pas besoin de cuisiner !</span>`;
+  else {
+    b.innerHTML = `<span>Soirée chargée : <b>${t}</b> à ${s.heure}. Une recette de 30 min max ?</span><button class="btn small" type="button">Recettes rapides</button>`;
+    b.querySelector('button').onclick = () => { document.getElementById('fQuick').click(); b.hidden = true; };
+  }
+  b.hidden = false;
+});
 if (window.GM && GM.statique && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});</script>
 <script>
 (() => {
@@ -673,7 +684,7 @@ function renderCourses(){
     const li = document.createElement('li');
     li.innerHTML = `<span>${esc(c.label)}${c.n!=null?`<span class="qty">${esc(fmtAmt(c.n,c.u))}</span>`:''}</span><button type="button" class="btn ghost small">Acheté</button><button type="button" class="link" aria-label="Retirer ${esc(c.label)} de la liste">Retirer</button>`;
     const [bought, rm] = li.querySelectorAll('button');
-    bought.onclick = () => { touch(); courses = courses.filter(x=>x!==c); const p = pantry.find(p=>p.id===c.id);
+    bought.onclick = () => { touch(); courses = courses.filter(x=>x!==c); syncRappels({terminer:[c.label]}); const p = pantry.find(p=>p.id===c.id);
       if (!p) pantry.push({id:c.id,label:c.label,urgent:false,n:c.n??null,u:c.n!=null?c.u:null});
       else if (p.n!=null && c.n!=null && UNIT[p.u]){ const add = conv(c.n,c.u,c.id,UNIT[p.u].dim); if (add!=null) p.n = Math.round((p.n + add/UNIT[p.u].f)*100)/100; }
       update(); toast(`${c.label} rangé dans le placard`); };
@@ -766,13 +777,22 @@ function card(e){
 
 // ---------- Fiche recette ----------
 function addToCourses(missing){
-  let n = 0;
+  let n = 0; const nouveaux = [];
   for (const m of missing){
     const c = courses.find(c=>c.id===m.id);
-    if (!c){ courses.push({id:m.id,label:m.label,n:m.buy?.n??null,u:m.buy?.u??null}); n++; }
+    if (!c){ courses.push({id:m.id,label:m.label,n:m.buy?.n??null,u:m.buy?.u??null}); n++; nouveaux.push(courses[courses.length-1]); }
     else if (m.buy && (c.n==null || (c.u===m.buy.u && c.n<m.buy.n))){ c.n = m.buy.n; c.u = m.buy.u; n++; }
   }
+  if (nouveaux.length) syncRappels({ajouter: nouveaux.map(c => ({titre: c.label, quantite: c.n!=null ? fmtAmt(c.n,c.u) : ''}))});
   return n;
+}
+// Avec la version Pythonista, la liste de courses est aussi envoyée dans l'appli Rappels.
+function syncRappels(corps){
+  if (!GM.rappels) return;
+  fetch('api/courses/rappels', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(corps)})
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(j => { if (j.ajoutes) toast(`Ajouté à vos Rappels « ${j.liste} »`); })
+    .catch(() => toast('Rappels non mis à jour : autorisez Pythonista à accéder aux Rappels.'));
 }
 const dlg = $('#dlg');
 function openSheet({name, minutes, servings, why, ings, steps, ai, onServings, cook, timing, diff, tlist}){

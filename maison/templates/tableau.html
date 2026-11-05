@@ -387,16 +387,17 @@ function renderTaches(data){
   const liste = data?.rappels || [];
   $('#tachesMaj').textContent = APPAREIL ? 'Rappels de cet appareil. Touchez le rond pour cocher une tâche.' : (data?.recu ? `Rappels Apple, synchronisés ${ilya(data.recu)}.` : '');
   if (data?.erreur){ box.innerHTML = `<p class="err">${esc(data.erreur)}</p>`; return; }
+  const avert = (data?.avertissements || []).map(a => `<p class="err">${esc(a)}</p>`).join('');
   if (!data?.recu){
     box.innerHTML = '<div class="empty">Vos rappels n’ont encore jamais été envoyés. Installez le Raccourci : <button type="button" class="more" id="voirReglages">voir les étapes</button>.</div>';
     $('#voirReglages').onclick = () => { $('#reglages').open = true; $('#reglages').scrollIntoView({behavior:'smooth'}); };
     return;
   }
-  if (!liste.length){ box.innerHTML = '<div class="empty">Aucun rappel en cours. Tout est fait !</div>'; return; }
+  if (!liste.length){ box.innerHTML = avert + '<div class="empty">Aucun rappel en cours. Tout est fait !</div>'; return; }
   const groupes = new Map();
   for (const r of liste){ if (!groupes.has(r.liste)) groupes.set(r.liste, []); groupes.get(r.liste).push({...r, e:echeance(r)}); }
   const noms = [...groupes.keys()].sort((a,b) => a.localeCompare(b, 'fr'));
-  box.innerHTML = '<div class="lists">' + noms.map(nom => {
+  box.innerHTML = avert + '<div class="lists">' + noms.map(nom => {
     const items = groupes.get(nom).sort((a,b) => a.e.ordre - b.e.ordre);
     const max = ouverts.has(nom) ? items.length : 6;
     return `<div class="list"><h3>${esc(nom)} <span class="count">${items.length}</span></h3><ul class="tasks">${items.slice(0,max).map(r =>
@@ -554,7 +555,7 @@ if (APPAREIL){
   reg.querySelector('div').innerHTML = `
     <form class="form" id="formReglages" autocomplete="off">
       <label>Ville pour la météo<input id="r_ville" value="${esc(R.ville || '')}" placeholder="Ex. Lyon"></label>
-      <label>Liste de courses dans Rappels<input id="r_liste" value="${esc(R.liste_courses || 'Courses')}"></label>
+      <label>Liste de courses dans Rappels<select id="r_liste"><option value="${esc(R.liste_courses || 'Courses')}">${esc(R.liste_courses || 'Courses')}</option></select></label>
       <label>Adresse iCal Google (facultatif)<input id="r_ical" type="password" placeholder="${R.agenda_ical ? 'Enregistrée : laisser vide pour la garder' : 'Vide : calendrier de l’iPhone'}"></label>
       <label>Smart Life : Access ID<input id="r_cle" placeholder="${R.smartlife_relie ? 'Enregistré : laisser vide pour le garder' : 'iot.tuya.com > projet > Overview'}"></label>
       <label>Smart Life : Access Secret<input id="r_secret" type="password" placeholder="${R.smartlife_relie ? 'Enregistré : laisser vide pour le garder' : ''}"></label>
@@ -564,6 +565,16 @@ if (APPAREIL){
       <div style="display:flex;gap:10px;align-items:center;align-self:end;flex-wrap:wrap"><button class="btn" type="submit">Enregistrer</button><span class="hint" id="r_msg"></span></div>
     </form>
     <p class="hint">Les clés restent dans le trousseau de cet appareil : sur l’iPad, saisissez-les une fois de plus. Sans adresse iCal, l’agenda lit le Calendrier de l’iPhone : ajoutez-y votre compte Google (Réglages > Apps > Calendrier > Comptes).</p>`;
+  // listes vues par Pythonista : choix de la liste de courses et diagnostic
+  reg.querySelector('div').insertAdjacentHTML('beforeend', '<p class="hint" id="r_listes">Lecture des listes Rappels…</p>');
+  fetch('api/rappels/listes').then(r => r.ok ? r.json() : Promise.reject(r.status)).then(d => {
+    const sel = $('#r_liste'), actuelle = R.liste_courses || 'Courses';
+    sel.innerHTML = d.listes.map(l => `<option value="${esc(l.nom)}"${l.nom === actuelle ? ' selected' : ''}>${esc(l.nom)}</option>`).join('')
+      + (d.trouvee ? '' : `<option value="${esc(actuelle)}" selected>${esc(actuelle)} (introuvable)</option>`);
+    $('#r_listes').innerHTML = (d.listes.length ? 'Listes Rappels vues par Pythonista : ' + d.listes.map(l =>
+      `<b>${esc(l.nom)}</b> (${l.erreur ? 'illisible : ' + esc(l.erreur) : l.nombre + ' en cours'})`).join(' · ') : 'Pythonista ne voit aucune liste Rappels : autorisez l’accès dans Réglages > Pythonista > Rappels.')
+      + (d.trouvee ? '' : ` <span class="err">La liste de courses « ${esc(actuelle)} » n’existe pas : choisissez-en une dans le menu.</span>`);
+  }).catch(() => { $('#r_listes').textContent = 'Impossible de lire les listes Rappels.'; });
   $('#formReglages').onsubmit = async ev => {
     ev.preventDefault();
     const v = id => document.getElementById(id).value.trim();

@@ -791,7 +791,7 @@ function syncRappels(corps){
   if (!GM.rappels) return;
   fetch('api/courses/rappels', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(corps)})
     .then(r => r.ok ? r.json() : Promise.reject())
-    .then(j => { if (j.ajoutes) toast(`Ajouté à vos Rappels « ${j.liste} »`); })
+    .then(j => { if (j.erreur) toast(j.erreur); else if (j.ajoutes) toast(`Ajouté à vos Rappels « ${j.liste} »`); })
     .catch(() => toast('Rappels non mis à jour : autorisez Pythonista à accéder aux Rappels.'));
 }
 const dlg = $('#dlg');

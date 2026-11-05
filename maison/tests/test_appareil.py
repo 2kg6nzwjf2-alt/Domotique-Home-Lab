@@ -56,7 +56,9 @@ def test_signature_tuya_de_reference():
 
 # ---------- Rappels simulés ----------
 def test_rappels_simules(tmp_path):
-    r = plateforme.RappelsSimules(str(tmp_path / "r.json"))
+    r = plateforme.RappelsSimules(str(tmp_path / "r.json"), listes=("Courses", "Maison"))
+    with pytest.raises(plateforme.ListeIntrouvable):
+        r.ajouter("Inexistante", "x")
     assert r.ajouter("Courses", "Lait (1 L)") and not r.ajouter("courses", "lait")  # pas de doublon
     assert r.ajouter("Maison", "Vitres")
     assert {(x["liste"], x["titre"]) for x in r.lire()} == {("Courses", "Lait (1 L)"), ("Maison", "Vitres")}
@@ -87,7 +89,7 @@ class Client:
 
 @pytest.fixture
 def appli(tmp_path):
-    rappels = plateforme.RappelsSimules(str(tmp_path / "rappels.json"))
+    rappels = plateforme.RappelsSimules(str(tmp_path / "rappels.json"), listes=("Maison", "Courses"))
     rappels.ajouter("Maison", "Payer la cantine")
     agenda = plateforme.AgendaSimule([ev("Dîner chez Paul", "20:00", "23:00")])
     coffre = plateforme.CoffreFichier(str(tmp_path / "coffre.json"))
@@ -182,3 +184,73 @@ def test_meteo_dans_les_reglages(appli):
     from test_maison import FauxMeteoHTTP
     a._meteo = Meteo("Lyon", session=FauxMeteoHTTP())
     assert c.json("GET", "/api/tableau")[1]["meteo"]["jours"][1]["libelle"] == "Éclaircies"
+
+
+def test_liste_de_courses_choisie(appli):
+    a, c, rappels, _ = appli
+    rappels.creer_liste("買い物リスト")
+    rappels.ajouter("買い物リスト", "牛乳")
+    _, d = c.json("GET", "/api/rappels/listes")
+    assert {l["nom"]: l["nombre"] for l in d["listes"]} == {"Maison": 1, "Courses": 0, "買い物リスト": 1} and d["trouvee"]
+    c.json("POST", "/api/reglages", {"liste_courses": "買い物リスト"})
+    _, d = c.json("GET", "/api/rappels/listes")
+    assert d["courses"] == "買い物リスト" and d["trouvee"]
+    assert c.json("POST", "/garde-manger/api/courses/rappels", {"ajouter": [{"titre": "Œufs"}]})[1]["ajoutes"] == 1
+    assert {x["titre"] for x in rappels.lire() if x["liste"] == "買い物リスト"} == {"牛乳", "Œufs"}
+    # une liste mal nommée n'est plus créée : message clair
+    c.json("POST", "/api/reglages", {"liste_courses": "買い物のリスタート"})
+    assert c.json("GET", "/api/rappels/listes")[1]["trouvee"] is False
+    r = c.json("POST", "/garde-manger/api/courses/rappels", {"ajouter": [{"titre": "Pain"}]})[1]
+    assert r["ajoutes"] == 0 and "introuvable" in r["erreur"]
+    assert "買い物のリスタート" not in {l["nom"] for l in rappels.listes()}
+
+
+# ---------- Rappels de l'iPhone, avec un faux module « reminders » de Pythonista ----------
+class FauxReminders:
+    class Calendar:
+        def __init__(self, title=""):
+            self.title = title
+
+    def __init__(self):
+        self.listes = [self.Calendar("Maison"), self.Calendar("買い物リスト"), self.Calendar("Cassée")]
+        self.items = {"Maison": [], "買い物リスト": [], "Cassée": []}
+        test = self
+
+        class Reminder:
+            def __init__(self, calendar=None):
+                self.calendar, self.title, self.completed, self.due_date = calendar, "", False, None
+
+            def save(self):
+                if self not in test.items[self.calendar.title]:
+                    test.items[self.calendar.title].append(self)
+        self.Reminder = Reminder
+
+    def get_all_calendars(self):
+        return list(self.listes)
+
+    def get_reminders(self, calendar=None, completed=None):
+        if calendar.title == "Cassée":
+            raise RuntimeError("liste partagée indisponible")
+        return [r for r in self.items[calendar.title] if completed is None or r.completed == completed]
+
+    def get_default_calendar(self):
+        return self.listes[0]
+
+
+def test_rappels_ios_avec_faux_module(monkeypatch):
+    from datetime import date
+    faux = FauxReminders()
+    monkeypatch.setitem(sys.modules, "reminders", faux)
+    r = plateforme.RappelsIOS()
+    assert r.ajouter("買い物リスト", "牛乳") and r.ajouter("maison", "Vitres")  # nom de liste sans tenir compte des majuscules
+    faux.items["Maison"][0].due_date = date(2026, 11, 5)  # échéance sans heure
+    lus = r.lire()
+    assert {(x["liste"], x["titre"]) for x in lus} == {("買い物リスト", "牛乳"), ("Maison", "Vitres")}
+    assert next(x for x in lus if x["titre"] == "Vitres")["journee"] is True
+    assert r.erreurs == ["Liste « Cassée » illisible (RuntimeError)"]  # les autres listes restent lisibles
+    assert {l["nom"]: (l["nombre"], l["erreur"]) for l in r.listes()} == {"Maison": (1, None), "買い物リスト": (1, None), "Cassée": (None, "RuntimeError")}
+    assert r.terminer(next(x["id"] for x in lus if x["titre"] == "牛乳"))
+    assert [x["titre"] for x in r.lire()] == ["Vitres"]
+    with pytest.raises(plateforme.ListeIntrouvable):
+        r.ajouter("買い物のリスタート", "Pain")
+    assert len(faux.listes) == 3  # aucune liste créée

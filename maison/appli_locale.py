@@ -23,6 +23,8 @@ for chemin in (ICI, DOSSIER_GM):
 
 import donnees as donnees_gm  # noqa: E402  (garde-manger/donnees.py)
 from liens import soiree  # noqa: E402
+from plateforme import ListeIntrouvable  # noqa: E402
+from plateforme import _cle_liste as plateforme_cle_liste  # noqa: E402
 from meteo import ErreurMeteo, Meteo  # noqa: E402
 from smartlife import ErreurSmartLife, SmartLife  # noqa: E402
 from stockage import EtatTropGros, Stockage  # noqa: E402  (garde-manger/stockage.py)
@@ -102,7 +104,8 @@ class Appli:
     def tableau(self):
         resultat = {}
         try:
-            resultat["rappels"] = {"recu": datetime.now(timezone.utc).isoformat(timespec="seconds"), "rappels": self.rappels.lire()}
+            resultat["rappels"] = {"recu": datetime.now(timezone.utc).isoformat(timespec="seconds"), "rappels": self.rappels.lire(),
+                                   "avertissements": list(getattr(self.rappels, "erreurs", []))}
         except Exception as e:
             resultat["rappels"] = {"recu": None, "rappels": [], "erreur": f"Rappels illisibles ({type(e).__name__}). Autorisez Pythonista : Réglages > Pythonista > Rappels."}
         agenda = self.agenda()
@@ -134,7 +137,18 @@ class Appli:
         agenda = self.agenda()
         return soiree(agenda["evenements"]) if agenda else None
 
+    def listes_rappels(self):
+        listes = self.rappels.listes()
+        cle = plateforme_cle_liste(self.liste_courses())
+        return {"listes": listes, "courses": self.liste_courses(), "trouvee": any(plateforme_cle_liste(l["nom"]) == cle for l in listes)}
+
     def courses_vers_rappels(self, corps):
+        try:
+            return self._courses_vers_rappels(corps)
+        except ListeIntrouvable as e:
+            return {"liste": self.liste_courses(), "ajoutes": 0, "termines": 0, "erreur": str(e)}
+
+    def _courses_vers_rappels(self, corps):
         liste, ajoutes, termines = self.liste_courses(), 0, 0
         for element in (corps.get("ajouter") or [])[:50]:
             if isinstance(element, dict) and str(element.get("titre") or "").strip():
@@ -222,6 +236,11 @@ class Gestionnaire(BaseHTTPRequestHandler):
             return self._envoyer(200, a.tableau())
         if chemin == "/api/reglages":
             return self._envoyer(200, a.reglages_publics())
+        if chemin == "/api/rappels/listes":
+            try:
+                return self._envoyer(200, a.listes_rappels())
+            except Exception as e:
+                return self._envoyer(500, {"code": "erreur", "message": f"Rappels illisibles ({type(e).__name__})"})
         if chemin == "/manifest.webmanifest":
             return self._fichier(os.path.join(ICI, "static"), "manifest.webmanifest")
         if chemin.startswith("/static/"):

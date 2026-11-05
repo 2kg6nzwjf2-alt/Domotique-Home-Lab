@@ -9,13 +9,22 @@ import json
 import os
 import threading
 import unicodedata
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 
 def _cle_titre(texte):
     """« Lardons (50 g) » et « lardons » désignent le même article de courses."""
     texte = str(texte or "").split(" (")[0].strip().lower()
     return "".join(c for c in unicodedata.normalize("NFD", texte) if unicodedata.category(c) != "Mn")
+
+
+def _cle_liste(nom):
+    """Nom de liste comparé sans tenir compte des majuscules ni des espaces (toutes écritures : 買い物リスト…)."""
+    return " ".join(unicodedata.normalize("NFKC", str(nom or "")).casefold().split())
+
+
+class ListeIntrouvable(ValueError):
+    pass
 
 
 def _rappel(identifiant, liste, titre, echeance):
@@ -25,6 +34,10 @@ def _rappel(identifiant, liste, titre, echeance):
         if echeance.tzinfo is None:
             echeance = echeance.astimezone()
         echeance = echeance.isoformat()
+    elif isinstance(echeance, date):  # échéance sans heure
+        journee, echeance = True, echeance.isoformat()
+    elif echeance is not None and not isinstance(echeance, str):
+        echeance = None
     return {"id": identifiant, "liste": str(liste or "Rappels")[:60], "titre": str(titre or "")[:200],
             "echeance": echeance or None, "journee": journee}
 
@@ -38,20 +51,36 @@ class RappelsIOS:
         import reminders
         self._r = reminders
         self._cache = {}
+        self.erreurs = []  # listes qui n'ont pas pu être lues au dernier passage
         self._verrou = threading.Lock()
 
     def _listes(self):
         return list(self._r.get_all_calendars())
 
-    def lire(self):
-        rappels, cache = [], {}
+    def listes(self):
+        """Toutes les listes vues par Pythonista, avec le nombre de rappels non terminés."""
+        resultat = []
         for liste in self._listes():
-            for n, r in enumerate(self._r.get_reminders(calendar=liste, completed=False)):
-                identifiant = str(getattr(r, "identifier", "") or f"{liste.title}#{n}#{r.title}")
-                cache[identifiant] = r
-                rappels.append(_rappel(identifiant, liste.title, r.title, getattr(r, "due_date", None)))
+            try:
+                nombre, erreur = len(self._r.get_reminders(calendar=liste, completed=False)), None
+            except Exception as e:
+                nombre, erreur = None, type(e).__name__
+            resultat.append({"nom": str(liste.title), "nombre": nombre, "erreur": erreur})
+        return resultat
+
+    def lire(self):
+        rappels, cache, erreurs = [], {}, []
+        for liste in self._listes():
+            nom = str(getattr(liste, "title", "") or "Rappels")
+            try:  # une liste illisible ne doit pas cacher les autres
+                for n, r in enumerate(self._r.get_reminders(calendar=liste, completed=False)):
+                    identifiant = str(getattr(r, "identifier", "") or f"{nom}#{n}#{r.title}")
+                    cache[identifiant] = r
+                    rappels.append(_rappel(identifiant, nom, r.title, getattr(r, "due_date", None)))
+            except Exception as e:
+                erreurs.append(f"Liste « {nom} » illisible ({type(e).__name__})")
         with self._verrou:
-            self._cache = cache
+            self._cache, self.erreurs = cache, erreurs
         return rappels
 
     def terminer(self, identifiant):
@@ -65,15 +94,9 @@ class RappelsIOS:
 
     def _liste(self, nom):
         for liste in self._listes():
-            if _cle_titre(liste.title) == _cle_titre(nom):
+            if _cle_liste(liste.title) == _cle_liste(nom):
                 return liste
-        try:  # la liste n'existe pas encore : on la crée
-            liste = self._r.Calendar()
-            liste.title = nom
-            liste.save()
-            return liste
-        except Exception:
-            return self._r.get_default_calendar()
+        raise ListeIntrouvable(f"Liste « {nom} » introuvable dans Rappels : choisissez-la dans les Réglages.")
 
     def ajouter(self, nom_liste, titre):
         liste = self._liste(nom_liste)
@@ -98,9 +121,12 @@ class RappelsIOS:
 class RappelsSimules:
     """Rappels gardés dans un fichier JSON : {"Liste": [{"titre", "echeance", "fait"}]}."""
 
-    def __init__(self, chemin):
+    def __init__(self, chemin, listes=()):
         self.chemin = chemin
+        self.erreurs = []
         self._verrou = threading.Lock()
+        for nom in listes:
+            self.creer_liste(nom)
 
     def _lire(self):
         try:
@@ -113,6 +139,16 @@ class RappelsSimules:
         os.makedirs(os.path.dirname(os.path.abspath(self.chemin)), exist_ok=True)
         with open(self.chemin, "w", encoding="utf-8") as f:
             json.dump(donnees, f, ensure_ascii=False, indent=1)
+
+    def creer_liste(self, nom):
+        with self._verrou:
+            d = self._lire()
+            d.setdefault(nom, [])
+            self._ecrire(d)
+
+    def listes(self):
+        return [{"nom": nom, "nombre": sum(1 for r in elements if not r.get("fait")), "erreur": None}
+                for nom, elements in self._lire().items()]
 
     def lire(self):
         rappels = []
@@ -134,13 +170,15 @@ class RappelsSimules:
         return True
 
     def _nom(self, d, nom):
-        return next((k for k in d if _cle_titre(k) == _cle_titre(nom)), nom)
+        trouve = next((k for k in d if _cle_liste(k) == _cle_liste(nom)), None)
+        if trouve is None:
+            raise ListeIntrouvable(f"Liste « {nom} » introuvable dans Rappels : choisissez-la dans les Réglages.")
+        return trouve
 
     def ajouter(self, nom_liste, titre):
         with self._verrou:
             d = self._lire()
-            nom = self._nom(d, nom_liste)
-            elements = d.setdefault(nom, [])
+            elements = d[self._nom(d, nom_liste)]
             if any(_cle_titre(r["titre"]) == _cle_titre(titre) and not r.get("fait") for r in elements):
                 return False
             elements.append({"titre": titre})
@@ -150,7 +188,7 @@ class RappelsSimules:
     def terminer_titre(self, nom_liste, titre):
         with self._verrou:
             d = self._lire()
-            for r in d.get(self._nom(d, nom_liste), []):
+            for r in d[self._nom(d, nom_liste)]:
                 if not r.get("fait") and _cle_titre(r["titre"]) == _cle_titre(titre):
                     r["fait"] = True
                     self._ecrire(d)

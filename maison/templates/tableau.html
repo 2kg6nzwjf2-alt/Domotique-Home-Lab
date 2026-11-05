@@ -96,6 +96,31 @@ button.dot:hover{border-color:var(--ok);background:var(--ok-soft)}
 .events li.encours{background:var(--accent-soft);border-radius:10px;padding-inline:8px;margin-inline:-8px;border-top-color:transparent}
 .events li.encours .h{color:var(--accent);font-weight:600}
 
+/* frise de la journée (mode paysage) */
+/* portrait : une seule grille, météo en premier. Paysage : l'agenda en colonne à gauche, les autres cartes à droite */
+.autres{display:contents}
+#carteMeteo{order:-1}
+@media (orientation: landscape) and (min-width: 700px){
+  main.grid{grid-template-columns:minmax(0,1fr) minmax(0,2fr)}
+  .autres{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px;align-items:start}
+  #carteMeteo{order:0}
+}
+.frise-scroll{max-height:min(72vh,760px);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;border-top:1px solid var(--line);margin-inline:-4px;padding-inline:4px}
+.frise{position:relative;margin-block:10px}
+.frise .heure{position:absolute;left:0;right:0;border-top:1px solid var(--line)}
+.frise .heure.demi{border-top-style:dashed;opacity:.55}
+.frise .heure span{position:absolute;top:-8px;left:0;width:46px;font-family:var(--f-mono);font-size:11.5px;color:var(--muted);background:var(--surface);line-height:1;padding-block:2px}
+.frise .evts{position:absolute;top:0;bottom:0;left:52px;right:0}
+.frise .evt{position:absolute;box-sizing:border-box;border-radius:8px;padding:3px 7px;background:var(--accent-soft);border-left:3px solid var(--accent);overflow:hidden;font-size:12.5px;line-height:1.25;color:var(--ink)}
+.frise .evt b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.frise .evt small{display:block;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11.5px}
+.frise .evt.passe{opacity:.5}
+.frise .evt.encours{box-shadow:inset 0 0 0 1.5px var(--accent)}
+.frise .evt.tache{background:var(--warn-soft);border-left-color:var(--warn)}
+.frise .maintenant{position:absolute;left:46px;right:0;border-top:2px solid var(--bad);z-index:3;pointer-events:none}
+.frise .maintenant::before{content:"";position:absolute;left:-5px;top:-6px;width:10px;height:10px;border-radius:50%;background:var(--bad)}
+.frise .maintenant span{position:absolute;left:-46px;top:-9px;width:40px;font-family:var(--f-mono);font-size:11px;font-weight:600;color:var(--bad);background:var(--surface);line-height:1.4}
+
 /* tâches */
 .lists{display:flex;flex-direction:column;gap:14px}
 .list h3{margin:0 0 4px;font-size:14px;display:flex;gap:8px;align-items:baseline}
@@ -160,14 +185,15 @@ ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;m
 
   <div class="alerte-courses" id="alerteCourses" hidden></div>
   <main class="grid">
-    <section class="card" aria-labelledby="h-meteo">
-      <div class="head"><h2 id="h-meteo">Météo</h2><span class="hint" id="meteoLieu"></span></div>
-      <div id="meteo"><p class="hint dots">Chargement</p></div>
-    </section>
-
-    <section class="card" aria-labelledby="h-agenda">
+    <section class="card" id="carteAgenda" aria-labelledby="h-agenda">
       <div class="head"><h2 id="h-agenda">Aujourd'hui</h2><span class="hint" id="agendaNb"></span></div>
       <div id="agenda"><p class="hint dots">Chargement</p></div>
+    </section>
+
+    <div class="autres">
+    <section class="card" id="carteMeteo" aria-labelledby="h-meteo">
+      <div class="head"><h2 id="h-meteo">Météo</h2><span class="hint" id="meteoLieu"></span></div>
+      <div id="meteo"><p class="hint dots">Chargement</p></div>
     </section>
 
     <section class="card" aria-labelledby="h-taches">
@@ -200,6 +226,7 @@ ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;m
       </a>
       <div id="gm"></div>
     </section>
+    </div>
   </main>
 
   <section class="card">
@@ -244,7 +271,7 @@ function horloge(){
   const d = fmt({weekday:'long', day:'numeric', month:'long'});
   $('#date').textContent = d.charAt(0).toUpperCase() + d.slice(1);
 }
-horloge(); setInterval(horloge, 15000);
+horloge(); setInterval(() => { horloge(); placerMaintenant(); }, 15000);
 
 function ilya(iso){
   if (!iso) return '';
@@ -272,6 +299,15 @@ function renderAgenda(a, rappels){
   $('#agendaNb').textContent = evs.length ? `${evs.length} événement${evs.length>1?'s':''}` : '';
   let html = (a.erreurs||[]).map(e => `<p class="err">${esc(e)}</p>`).join('');
   if (allday.length) html += `<div class="allday">${allday.map(e => `<span>${esc(e.titre)}</span>`).join('')}</div>`;
+  if (PAYSAGE.matches){  // mode paysage : frise de toute la journée
+    const ancien = box.querySelector('.frise-scroll');
+    const defilement = ancien ? ancien.scrollTop : null;
+    box.innerHTML = html + frise(timed, plusieurs);
+    const zone = box.querySelector('.frise-scroll');
+    zone.scrollTop = defilement != null ? defilement : Math.max(0, minutesDuJour(new Date()) * PX_MIN - zone.clientHeight / 3);
+    placerMaintenant();
+    return;
+  }
   if (timed.length){
     html += '<ul class="events">' + timed.map(e => {
       const d = new Date(e.debut), f = e.fin ? new Date(e.fin) : d;
@@ -283,6 +319,56 @@ function renderAgenda(a, rappels){
   if (!evs.length && !timed.length) html += '<div class="empty">Rien de prévu aujourd’hui.</div>';
   box.innerHTML = html;
 }
+
+// ---------- Frise de la journée (paysage) ----------
+const PAYSAGE = matchMedia('(orientation: landscape)');
+const PX_MIN = 0.9;  // 54 px par heure
+function minutesDuJour(d){
+  const p = new Intl.DateTimeFormat('en-GB', {timeZone:TZ, hour:'2-digit', minute:'2-digit', hourCycle:'h23'}).formatToParts(d);
+  const v = t => +(p.find(x => x.type === t)?.value || 0);
+  return v('hour') * 60 + v('minute');
+}
+function frise(timed, plusieurs){
+  const aujour = jourCle(new Date()), now = Date.now();
+  // place de chaque rendez-vous dans la journée (un rendez-vous commencé la veille part de 00:00)
+  const items = timed.map(e => {
+    const d = new Date(e.debut), f = e.fin ? new Date(e.fin) : new Date(d.getTime() + 15*60000);
+    const debut = jourCle(d) < aujour ? 0 : minutesDuJour(d);
+    const fin = jourCle(f) > aujour ? 1440 : Math.max(minutesDuJour(f), debut);
+    return {e, d, f, debut, fin: Math.max(fin, debut + (e.tache ? 25 : 30))};
+  }).sort((a, b) => a.debut - b.debut || b.fin - a.fin);
+  // rendez-vous qui se chevauchent : côte à côte
+  let groupe = [], finGroupe = -1;
+  const fermer = () => { const n = Math.max(1, ...groupe.map(x => x.col + 1)); groupe.forEach(x => x.cols = n); groupe = []; };
+  for (const it of items){
+    if (it.debut >= finGroupe) fermer();
+    const colonnes = [];
+    groupe.forEach(x => { if (x.fin > it.debut) colonnes[x.col] = true; });
+    it.col = colonnes.findIndex(x => !x); if (it.col < 0) it.col = colonnes.length;
+    groupe.push(it); finGroupe = Math.max(finGroupe, it.fin);
+  }
+  fermer();
+  let lignes = '';
+  for (let h = 0; h < 24; h++){
+    lignes += `<div class="heure" style="top:${h*60*PX_MIN}px"><span>${String(h).padStart(2,'0')}:00</span></div>`;
+    lignes += `<div class="heure demi" style="top:${(h*60+30)*PX_MIN}px"></div>`;
+  }
+  const blocs = items.map(({e, d, f, debut, fin, col, cols}) => {
+    const etat = e.tache ? 'tache' : f.getTime() <= now ? 'passe' : d.getTime() <= now ? 'encours' : '';
+    const sous = e.tache ? `Tâche · ${e.lieu || ''}` : [`${heure(d)}${e.fin ? '–' + heure(f) : ''}`, e.lieu, plusieurs ? e.agenda : ''].filter(Boolean).join(' · ');
+    const largeur = 100 / cols;
+    return `<div class="evt ${etat}" style="top:${debut*PX_MIN}px;height:${(fin-debut)*PX_MIN - 2}px;left:calc(${col*largeur}% + 1px);width:calc(${largeur}% - 3px)" title="${esc(e.titre)}"><b>${esc(e.titre)}</b><small>${esc(sous)}</small></div>`;
+  }).join('');
+  return `<div class="frise-scroll"><div class="frise" style="height:${1440*PX_MIN}px">${lignes}<div class="evts">${blocs}</div><div class="maintenant" id="maintenant"><span></span></div></div></div>`;
+}
+function placerMaintenant(){
+  const ligne = document.getElementById('maintenant');
+  if (!ligne) return;
+  const m = minutesDuJour(new Date());
+  ligne.style.top = (m * PX_MIN) + 'px';
+  ligne.querySelector('span').textContent = heure(new Date());
+}
+PAYSAGE.addEventListener('change', () => { if (dernier) renderAgenda(dernier.agenda, dernier.rappels); });
 
 // ---------- Tâches (Rappels Apple) ----------
 const ouverts = new Set();

@@ -6,6 +6,7 @@ Sur un ordinateur, ce fichier lance une version de démonstration dans le naviga
 
 import os
 import sys
+import threading
 
 ICI = os.path.dirname(os.path.abspath(__file__))
 for dossier in ("maison", "garde-manger"):
@@ -22,6 +23,16 @@ import appli_locale  # noqa: E402
 import plateforme  # noqa: E402
 
 DONNEES = os.path.join(ICI, "donnees")
+
+if ui is not None:
+    class Fenetre(ui.View):
+        """Fenêtre de l'appli : prévient quand on la ferme."""
+
+        fini = None
+
+        def will_close(self):
+            if self.fini is not None:
+                self.fini.set()
 
 
 def creer_appli():
@@ -63,12 +74,22 @@ def main():
         except KeyboardInterrupt:
             serveur.shutdown()
         return
-    vue = ui.WebView(name="Maison")
+    # Le serveur s'arrête seulement quand la fenêtre est fermée par la croix (will_close).
+    # wait_modal() ne convient pas : il rend la main dès qu'une autre vue recouvre la fenêtre,
+    # par exemple l'appareil photo du scan des codes-barres, et le serveur s'arrêtait alors.
+    fini = threading.Event()
+    fenetre = Fenetre(name="Maison", background_color="#f3f5f9")
+    fenetre.fini = fini
+    vue = ui.WebView(frame=fenetre.bounds, flex="WH")
     vue.background_color = "#f3f5f9"
+    fenetre.add_subview(vue)
     vue.load_url(adresse)
-    vue.present("fullscreen")
-    vue.wait_modal()
-    serveur.shutdown()
+    fenetre.present("fullscreen")
+    try:
+        while not fini.wait(0.5):
+            pass
+    finally:
+        serveur.shutdown()
 
 
 if __name__ == "__main__":

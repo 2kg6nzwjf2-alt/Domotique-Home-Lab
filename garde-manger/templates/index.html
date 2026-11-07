@@ -1361,7 +1361,9 @@ async function ficheProduit(code){
     return {code, trouve: !!(p && nom), nom, marque: String(p?.brands || '').split(',')[0].trim(), quantite: String(p?.quantity || ''),
             generique: p?.generic_name_fr || '', categories: String(p?.categories || '').split(',').map(x => x.trim()).filter(Boolean).slice(-8)};
   }
-  const r = await fetch('api/code/' + code);
+  let r;
+  try { r = await fetch('api/code/' + code); }
+  catch { throw new Error(GM.scanner ? 'L’appli ne répond plus : fermez Maison (croix en haut à gauche) et relancez-la.' : 'Le serveur ne répond pas. Vérifiez la connexion.'); }
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(d.message || 'Open Food Facts ne répond pas.');
   return d;
@@ -1467,7 +1469,7 @@ if (GM.codes || GM.statique){
       st.className = 'status'; st.textContent = '';
       if (d.annule) return;
       if (d.code) chercherCode(d.code); else saisirCode(d.erreur || d.message || 'Code-barres illisible.');
-    } catch { st.className = 'status'; st.textContent = ''; saisirCode('Scan impossible : tapez les chiffres.'); }
+    } catch { st.className = 'status'; st.textContent = ''; saisirCode('L’appli ne répond plus : fermez Maison (croix en haut à gauche) et relancez-la.'); }
   };
 }
 

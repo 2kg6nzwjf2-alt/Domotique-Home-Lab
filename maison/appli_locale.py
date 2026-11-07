@@ -3,7 +3,7 @@
 Un petit serveur interne (bibliothèque standard, adresse 127.0.0.1 seulement) sert
 les pages au navigateur intégré de Pythonista, le temps que l'appli est ouverte.
 Les données (placard, courses) sont rangées dans iCloud Drive, donc partagées
-entre l'iPhone et l'iPad ; les clés Smart Life restent dans le trousseau.
+entre l'iPhone et l'iPad ; les réglages restent dans le trousseau de l'appareil.
 """
 
 import json
@@ -26,12 +26,12 @@ from liens import soiree  # noqa: E402
 from plateforme import ListeIntrouvable  # noqa: E402
 from plateforme import _cle_liste as plateforme_cle_liste  # noqa: E402
 from meteo import ErreurMeteo, Meteo  # noqa: E402
-from smartlife import ErreurSmartLife, SmartLife  # noqa: E402
 from stockage import EtatTropGros, Stockage  # noqa: E402  (garde-manger/stockage.py)
 
 MARQUEUR_MAISON = "/*__MAISON__*/null"
 MARQUEUR_GM = "/*__GARDE_MANGER__*/null"
-REGLAGES_PUBLICS = ("smartlife_region", "smartlife_alarme", "smartlife_camera", "liste_courses", "ville")
+REGLAGES_PUBLICS = ("liste_courses", "ville")
+ANCIENS_REGLAGES = ("smartlife_cle", "smartlife_secret", "smartlife_region", "smartlife_alarme", "smartlife_camera")
 
 
 def _json_page(valeur):
@@ -48,17 +48,16 @@ class Appli:
             self.page_maison = f.read()
         with open(os.path.join(DOSSIER_GM, "templates", "index.html"), encoding="utf-8") as f:
             self.page_gm = f.read()
-        self._smartlife, self._agenda_ical = None, None
+        self._agenda_ical = None
         self._charger_reglages()
 
     # ---------- Réglages ----------
     def _charger_reglages(self):
         r = self.coffre.lire()
+        if any(cle in r for cle in ANCIENS_REGLAGES):  # Smart Life retiré : ses clés sont effacées du trousseau
+            r = {k: v for k, v in r.items() if k not in ANCIENS_REGLAGES}
+            self.coffre.ecrire(r)
         self.reglages = r
-        self._smartlife = None
-        if r.get("smartlife_cle") and r.get("smartlife_secret"):
-            self._smartlife = SmartLife(r.get("smartlife_region") or "eu", r["smartlife_cle"], r["smartlife_secret"],
-                                        r.get("smartlife_alarme"), r.get("smartlife_camera"))
         self._meteo = Meteo.depuis_texte(r.get("ville"))
         self._agenda_ical = None
         if r.get("agenda_ical"):
@@ -69,7 +68,6 @@ class Appli:
         r = self.reglages
         publics = {k: r.get(k, "") for k in REGLAGES_PUBLICS}
         publics["liste_courses"] = publics["liste_courses"] or "Courses"
-        publics["smartlife_relie"] = bool(r.get("smartlife_cle") and r.get("smartlife_secret"))
         publics["agenda_ical"] = bool(r.get("agenda_ical"))
         return publics
 
@@ -78,7 +76,7 @@ class Appli:
         for cle in REGLAGES_PUBLICS:
             if cle in nouveaux:
                 r[cle] = str(nouveaux[cle] or "").strip()[:200]
-        for cle in ("smartlife_cle", "smartlife_secret", "agenda_ical"):
+        for cle in ("agenda_ical",):
             valeur = str(nouveaux.get(cle) or "").strip()
             if valeur:  # vide = on garde la valeur enregistrée
                 r[cle] = valeur[:2000]
@@ -116,13 +114,6 @@ class Appli:
                 resultat["meteo"] = self._meteo.previsions()
             except ErreurMeteo as e:
                 resultat["meteo"] = {"erreur": str(e)}
-        if self._smartlife and self._smartlife.alarme_id:
-            try:
-                resultat["alarme"] = self._smartlife.etat_alarme()
-            except ErreurSmartLife as e:
-                resultat["alarme"] = {"erreur": e.message}
-            except Exception as e:
-                resultat["alarme"] = {"erreur": f"Smart Life ne répond pas ({type(e).__name__})"}
         _, etat = self.etat_gm.lire()
         courses = etat.get("courses") if isinstance(etat.get("courses"), list) else []
         placard = etat.get("pantry") if isinstance(etat.get("pantry"), list) else []
@@ -159,11 +150,6 @@ class Appli:
             termines += bool(self.rappels.terminer_titre(liste, str(titre)))
         return {"liste": liste, "ajoutes": ajoutes, "termines": termines}
 
-    def camera(self):
-        if not (self._smartlife and self._smartlife.camera_id):
-            raise ErreurSmartLife("aucune caméra configurée", "non_configure")
-        return self._smartlife.flux_camera()
-
     # ---------- Pages ----------
     def page_tableau(self):
         r = self.reglages_publics()
@@ -171,8 +157,6 @@ class Appli:
             "mode": "appareil",
             "fuseau": None,  # heure de l'appareil
             "agenda": True,
-            "alarme": bool(self._smartlife and self._smartlife.alarme_id),
-            "camera": bool(self._smartlife and self._smartlife.camera_id),
             "cocher": True,
             "meteo": self._meteo is not None,
             "reglages": r,
@@ -284,11 +268,6 @@ class Gestionnaire(BaseHTTPRequestHandler):
                 return self._envoyer(200, {"ok": bool(a.rappels.terminer(str(corps.get("id") or "")))})
             if chemin == "/api/reglages":
                 return self._envoyer(200, a.enregistrer_reglages(corps))
-            if chemin == "/api/camera/direct":
-                try:
-                    return self._envoyer(200, {"url": a.camera()})
-                except ErreurSmartLife as e:
-                    return self._envoyer(404 if e.code == "non_configure" else 502, {"code": e.code, "message": e.message})
             if chemin == "/garde-manger/api/courses/rappels":
                 return self._envoyer(200, a.courses_vers_rappels(corps))
             if chemin.startswith("/garde-manger/api/claude/"):

@@ -11,7 +11,6 @@ sys.path.insert(0, ICI)
 from agenda import Agenda  # noqa: E402
 from rappels import analyser_json, analyser_texte  # noqa: E402
 from serveur import create_app  # noqa: E402
-from smartlife import ErreurSmartLife, SmartLife, lire_alarme  # noqa: E402
 
 CLE = "cle-du-raccourci"
 
@@ -83,32 +82,10 @@ class FauxHTTP:
         return r
 
 
-class FauxTuya:
-    def __init__(self, statut=None, en_ligne=True, flux="https://flux.example/live.m3u8"):
-        self.statut = statut or [{"code": "master_mode", "value": "arm"}, {"code": "master_state", "value": "normal"}]
-        self.en_ligne, self.flux, self.appels = en_ligne, flux, []
-        self.error = None
-
-    def cloudrequest(self, url, action=None, post=None, query=None):
-        self.appels.append((url, action, post))
-        if url.endswith("/status"):
-            return {"success": True, "result": self.statut}
-        if url.endswith("/stream/actions/allocate"):
-            if not self.flux:
-                return {"success": False, "code": 1106, "msg": "permission deny"}
-            return {"success": True, "result": {"url": self.flux}}
-        return {"success": True, "result": {"online": self.en_ligne}}
-
-
-def faux_smartlife(**kw):
-    tuya = FauxTuya(**kw)
-    return SmartLife("eu", "k", "s", "alarme1", "camera1", fabrique=lambda: tuya), tuya
-
-
 @pytest.fixture
 def appli(tmp_path):
     def fabrique(**kw):
-        params = dict(dossier_donnees=str(tmp_path), mot_de_passe="", cle_raccourci=CLE, agenda=None, smartlife=None, claude=None, meteo=None)
+        params = dict(dossier_donnees=str(tmp_path), mot_de_passe="", cle_raccourci=CLE, agenda=None, claude=None, meteo=None)
         params.update(kw)
         return create_app(**params).test_client()
     return fabrique
@@ -191,45 +168,6 @@ def test_agenda_dans_le_tableau(appli):
     assert len(Agenda.depuis_texte("https://a/1.ics, https://b/2.ics").adresses) == 2
 
 
-# ---------- Smart Life ----------
-def test_lire_alarme():
-    assert lire_alarme([{"code": "master_mode", "value": "disarmed"}])["niveau"] == "off"
-    assert lire_alarme([{"code": "master_mode", "value": "home"}])["libelle"] == "Activée (présence)"
-    declenchee = lire_alarme([{"code": "master_mode", "value": "arm"}, {"code": "master_state", "value": "alarm"}])
-    assert declenchee["niveau"] == "alerte" and declenchee["libelle"] == "Alarme déclenchée"
-    assert lire_alarme([])["niveau"] == "inconnu"
-
-
-def test_alarme_et_camera(appli):
-    sl, tuya = faux_smartlife()
-    c = appli(smartlife=sl)
-    a = c.get("/api/tableau").get_json()["alarme"]
-    assert a["libelle"] == "Activée (absence)" and a["en_ligne"] is True
-    c.get("/api/tableau")
-    assert sum(1 for u, *_ in tuya.appels if u.endswith("/status")) == 1  # cache de 15 s
-    r = c.post("/api/camera/direct")
-    assert r.get_json() == {"url": "https://flux.example/live.m3u8"}
-    assert ("/v1.0/devices/camera1/stream/actions/allocate", "POST", {"type": "hls"}) in tuya.appels
-
-
-def test_camera_refusee(appli):
-    sl, _ = faux_smartlife(flux=None)
-    r = appli(smartlife=sl).post("/api/camera/direct")
-    assert r.status_code == 502 and "permission deny" in r.get_json()["message"]
-    assert appli().post("/api/camera/direct").status_code == 404
-
-
-def test_smartlife_erreur_de_connexion(appli):
-    class Casse:
-        error = {"Error": "Cloud _gettoken() failed", "Err": "914"}
-    sl = SmartLife("eu", "k", "s", "alarme1", None, fabrique=Casse)
-    with pytest.raises(ErreurSmartLife):
-        sl.etat_alarme()
-    a = appli(smartlife=SmartLife("eu", "k", "s", "alarme1", None, fabrique=Casse)).get("/api/tableau").get_json()["alarme"]
-    assert "gettoken" in a["erreur"]
-    assert SmartLife.depuis_environnement({}) is None
-
-
 # ---------- Tableau, connexion et sous-appli ----------
 def test_page_tableau(appli):
     html = appli().get("/").get_data(as_text=True)
@@ -237,7 +175,8 @@ def test_page_tableau(appli):
     debut = html.index("window.MAISON = ") + len("window.MAISON = ")
     m = json.loads(html[debut:html.index(";</script>", debut)])
     assert m["raccourci"]["cle"] == CLE and m["raccourci"]["adresse"].endswith("/api/rappels")
-    assert m["agenda"] is False and m["camera"] is False
+    assert m["agenda"] is False and "camera" not in m and "alarme" not in m
+    assert appli().post("/api/camera/direct").status_code in (404, 405)  # caméra retirée
 
 
 def test_garde_manger_sous_appli(appli):

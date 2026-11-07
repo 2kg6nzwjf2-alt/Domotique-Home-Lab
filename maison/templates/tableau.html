@@ -48,7 +48,6 @@ a{color:var(--accent)}
 .maj{font-size:12.5px;color:var(--muted);text-align:right;margin-top:4px}
 .resume{margin:8px 0 0;font-size:15px;font-weight:500}
 .resume b{color:var(--bad)}
-.alerte-courses{background:var(--warn-soft);border-radius:12px;padding:10px 14px;font-size:14.5px}
 .events li.tache .h{color:var(--warn)}
 .events li.tache .t::before{content:"Tâche · ";color:var(--muted);font-weight:500}
 button.dot{padding:0;background:none;cursor:pointer}
@@ -136,18 +135,6 @@ button.dot:hover{border-color:var(--ok);background:var(--ok-soft)}
 .more{background:none;border:0;padding:2px 0;color:var(--accent);font-weight:600;font-size:13.5px}
 
 /* maison */
-.alarm{display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;background:var(--bg)}
-.alarm .pastille{width:14px;height:14px;border-radius:50%;background:var(--muted);flex:none}
-.alarm.off .pastille{background:var(--ok)} .alarm.on .pastille{background:var(--warn)}
-.alarm.alerte{background:var(--bad-soft)} .alarm.alerte .pastille{background:var(--bad);animation:pulse 1s ease-in-out infinite}
-.alarm b{font-size:17px;display:block}
-.alarm small{color:var(--muted);font-size:12.5px}
-@keyframes pulse{50%{opacity:.35}}
-@media (prefers-reduced-motion:reduce){.alarm.alerte .pastille{animation:none}}
-.cam{position:relative;aspect-ratio:16/9;max-width:100%;border-radius:12px;overflow:hidden;background:#0b1020;display:grid;place-items:center}
-.cam video{width:100%;height:100%;object-fit:contain;background:#000}
-.cam .over{position:absolute;inset:0;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;color:#e6ebf5;text-align:center;padding:12px}
-.cam .over p{margin:0;font-size:13px;color:#b9c3d8}
 .dots::after{content:"";display:inline-block;width:1.2em;text-align:left;animation:dots 1.2s steps(4) infinite}
 @keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
 
@@ -183,7 +170,6 @@ ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;m
     </div>
   </header>
 
-  <div class="alerte-courses" id="alerteCourses" hidden></div>
   <main class="grid">
     <section class="card" id="carteAgenda" aria-labelledby="h-agenda">
       <div class="head"><h2 id="h-agenda">Aujourd'hui</h2><span class="hint" id="agendaNb"></span></div>
@@ -203,20 +189,6 @@ ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;m
       </div>
       <p class="hint" id="tachesMaj"></p>
       <div id="taches"><p class="hint dots">Chargement</p></div>
-    </section>
-
-    <section class="card" aria-labelledby="h-maison">
-      <div class="head"><h2 id="h-maison">Sécurité</h2></div>
-      <div id="alarme"></div>
-      <div id="camBox">
-        <div class="cam" id="cam">
-          <div class="over" id="camOver">
-            <button class="btn" type="button" id="camGo">Voir en direct</button>
-            <p>La vidéo s'arrête seule après 5 minutes.</p>
-          </div>
-        </div>
-        <div class="head" style="margin-top:8px"><span class="hint" id="camMsg"></span><button class="btn ghost small" type="button" id="camStop" hidden>Arrêter</button></div>
-      </div>
     </section>
 
     <section class="card" aria-labelledby="h-gm">
@@ -417,57 +389,6 @@ function renderTaches(data){
 $('#sync').href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(M.raccourci?.nom || 'Envoyer mes rappels');
 $('#sync').hidden = APPAREIL;
 
-// ---------- Alarme ----------
-function renderAlarme(a){
-  const box = $('#alarme');
-  if (!M.alarme){ box.innerHTML = APPAREIL ? '<div class="empty">Alarme Smart Life pas encore reliée : ajoutez vos clés dans <b>Réglages</b>, en bas de la page.</div>' : '<div class="empty">Alarme Smart Life pas encore reliée (voir le README : <code>SMARTLIFE_ALARME_ID</code>).</div>'; return; }
-  if (!a || a.erreur){ box.innerHTML = `<div class="alarm"><span class="pastille"></span><div><b>Alarme : état inconnu</b><small>${esc(a?.erreur || 'Smart Life ne répond pas')}</small></div></div>`; return; }
-  const horsLigne = a.en_ligne === false;
-  box.innerHTML = `<div class="alarm ${horsLigne ? '' : a.niveau}" role="status"><span class="pastille" aria-hidden="true"></span><div><b>Alarme : ${esc(horsLigne ? 'hors ligne' : a.libelle)}</b><small>Smart Life · ${a.lu ? 'lu à ' + heure(new Date(a.lu*1000)) : ''}</small></div></div>`;
-}
-
-// ---------- Caméra (direct HLS) ----------
-let video = null, arret = null;
-function stopCam(msg){
-  clearTimeout(arret);
-  if (video){ video.pause(); video.removeAttribute('src'); video.load(); video.hls?.destroy(); video.remove(); video = null; }
-  $('#camOver').hidden = false; $('#camStop').hidden = true; $('#camGo').disabled = false;
-  $('#camMsg').textContent = msg || '';
-}
-function chargerHls(){
-  return window.Hls ? Promise.resolve(window.Hls) : new Promise((ok, ko) => {
-    const s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js';
-    s.onload = () => ok(window.Hls); s.onerror = ko; document.head.append(s);
-  });
-}
-$('#camGo').onclick = async () => {
-  $('#camGo').disabled = true; $('#camMsg').className = 'hint dots'; $('#camMsg').textContent = 'Connexion à la caméra';
-  try {
-    const r = await fetch('api/camera/direct', {method:'POST'});
-    const j = await r.json().catch(() => ({}));
-    if (r.status === 401) { location.reload(); return; }
-    if (!r.ok) throw new Error(j.message || 'Smart Life ne répond pas');
-    video = document.createElement('video');
-    Object.assign(video, {muted:true, autoplay:true, controls:true, playsInline:true});
-    video.setAttribute('playsinline', '');
-    $('#cam').prepend(video);
-    if (video.canPlayType('application/vnd.apple.mpegurl')) video.src = j.url;
-    else {
-      const Hls = await chargerHls();
-      if (!Hls?.isSupported()) throw new Error('Ce navigateur ne lit pas la vidéo en direct. Utilisez Safari.');
-      video.hls = new Hls(); video.hls.loadSource(j.url); video.hls.attachMedia(video);
-    }
-    video.onerror = () => stopCam('La vidéo n’a pas pu être lue. Réessayez.');
-    $('#camOver').hidden = true; $('#camStop').hidden = false;
-    $('#camMsg').className = 'hint'; $('#camMsg').textContent = 'En direct';
-    arret = setTimeout(() => stopCam('Vidéo arrêtée après 5 minutes.'), 5*60*1000);
-  } catch (e) {
-    stopCam(); $('#camMsg').className = 'err'; $('#camMsg').textContent = e.message || 'La caméra ne répond pas.';
-  }
-};
-$('#camStop').onclick = () => stopCam();
-if (!M.camera){ $('#camBox').innerHTML = APPAREIL ? '<div class="empty">Caméra Smart Life pas encore reliée : ajoutez son identifiant dans <b>Réglages</b>.</div>' : '<div class="empty">Caméra Smart Life pas encore reliée (voir le README : <code>SMARTLIFE_CAMERA_ID</code>).</div>'; }
 
 // ---------- Garde-manger ----------
 function renderGm(g){
@@ -535,16 +456,8 @@ function renderResume(d){
   const [auj, dem] = d.meteo?.jours || [];
   if (auj?.pluie >= 60) morceaux.push(`pluie probable aujourd’hui (${Math.round(auj.pluie)} %)`);
   else if (dem?.pluie >= 60) morceaux.push(`pluie probable demain (${Math.round(dem.pluie)} %)`);
-  if (d.alarme?.niveau === 'alerte') morceaux.unshift('<b>Alarme déclenchée</b>');
   $('#resume').innerHTML = morceaux.join(' · ');
   $('#resume').hidden = !morceaux.length;
-  // alarme mise en mode absence : vous partez, pensez aux courses
-  const courses = (d.rappels?.rappels || []).filter(r => /course/i.test(r.liste)).map(r => r.titre).concat(d.garde_manger?.courses || []);
-  const ac = $('#alerteCourses');
-  if (d.alarme?.mode === 'arm' && courses.length){
-    ac.innerHTML = `Alarme activée, vous partez ? N’oubliez pas les courses : ${esc([...new Set(courses)].slice(0,8).join(', '))}${courses.length>8?'…':''}`;
-    ac.hidden = false;
-  } else ac.hidden = true;
 }
 
 // ---------- Réglages dans l'appli (version Pythonista) ----------
@@ -557,14 +470,9 @@ if (APPAREIL){
       <label>Ville pour la météo<input id="r_ville" value="${esc(R.ville || '')}" placeholder="Ex. Lyon"></label>
       <label>Liste de courses dans Rappels<select id="r_liste"><option value="${esc(R.liste_courses || 'Courses')}">${esc(R.liste_courses || 'Courses')}</option></select></label>
       <label>Adresse iCal Google (facultatif)<input id="r_ical" type="password" placeholder="${R.agenda_ical ? 'Enregistrée : laisser vide pour la garder' : 'Vide : calendrier de l’iPhone'}"></label>
-      <label>Smart Life : Access ID<input id="r_cle" placeholder="${R.smartlife_relie ? 'Enregistré : laisser vide pour le garder' : 'iot.tuya.com > projet > Overview'}"></label>
-      <label>Smart Life : Access Secret<input id="r_secret" type="password" placeholder="${R.smartlife_relie ? 'Enregistré : laisser vide pour le garder' : ''}"></label>
-      <label>Centre de données Tuya<select id="r_region">${[['eu','Europe centrale'],['weu','Europe de l’Ouest'],['us','États-Unis'],['in','Inde'],['cn','Chine']].map(([v,t]) => `<option value="${v}"${(R.smartlife_region||'eu')===v?' selected':''}>${t}</option>`).join('')}</select></label>
-      <label>Identifiant de l’alarme (Device ID)<input id="r_alarme" value="${esc(R.smartlife_alarme || '')}"></label>
-      <label>Identifiant de la caméra (Device ID)<input id="r_camera" value="${esc(R.smartlife_camera || '')}"></label>
       <div style="display:flex;gap:10px;align-items:center;align-self:end;flex-wrap:wrap"><button class="btn" type="submit">Enregistrer</button><span class="hint" id="r_msg"></span></div>
     </form>
-    <p class="hint">Les clés restent dans le trousseau de cet appareil : sur l’iPad, saisissez-les une fois de plus. Sans adresse iCal, l’agenda lit le Calendrier de l’iPhone : ajoutez-y votre compte Google (Réglages > Apps > Calendrier > Comptes).</p>`;
+    <p class="hint">Les réglages restent sur cet appareil : sur l’iPad, saisissez-les une fois de plus. Sans adresse iCal, l’agenda lit le Calendrier de l’iPhone : ajoutez-y votre compte Google (Réglages > Apps > Calendrier > Comptes).</p>`;
   // listes vues par Pythonista : choix de la liste de courses et diagnostic
   reg.querySelector('div').insertAdjacentHTML('beforeend', '<p class="hint" id="r_listes">Lecture des listes Rappels…</p>');
   fetch('api/rappels/listes').then(r => r.ok ? r.json() : Promise.reject(r.status)).then(d => {
@@ -581,8 +489,7 @@ if (APPAREIL){
     $('#r_msg').className = 'hint dots'; $('#r_msg').textContent = 'Enregistrement';
     try {
       const r = await fetch('api/reglages', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
-        ville: v('r_ville'), liste_courses: v('r_liste'), agenda_ical: v('r_ical'), smartlife_cle: v('r_cle'), smartlife_secret: v('r_secret'),
-        smartlife_region: v('r_region'), smartlife_alarme: v('r_alarme'), smartlife_camera: v('r_camera')})});
+        ville: v('r_ville'), liste_courses: v('r_liste'), agenda_ical: v('r_ical')})});
       if (!r.ok) throw 0;
       $('#r_msg').className = 'ok'; $('#r_msg').textContent = 'Enregistré';
       setTimeout(() => location.reload(), 700);
@@ -599,17 +506,17 @@ async function charger(){
     if (r.status === 401) { location.reload(); return; }
     if (!r.ok) throw new Error('HTTP ' + r.status);
     dernier = await r.json();
-    renderAgenda(dernier.agenda, dernier.rappels); renderTaches(dernier.rappels); renderAlarme(dernier.alarme); renderGm(dernier.garde_manger); renderMeteo(dernier.meteo);
+    renderAgenda(dernier.agenda, dernier.rappels); renderTaches(dernier.rappels); renderGm(dernier.garde_manger); renderMeteo(dernier.meteo);
     renderResume(dernier);
     $('#maj').textContent = 'Mis à jour à ' + heure(new Date());
   } catch {
     $('#maj').textContent = 'Serveur injoignable' + (dernier ? ' : dernières données affichées' : '');
-    if (!dernier){ if (M.meteo) renderMeteo({erreur:'Météo indisponible pour le moment.'}); renderAgenda(null); $('#taches').innerHTML = '<p class="err">Tâches indisponibles pour le moment.</p>'; renderAlarme({erreur:'Serveur injoignable'}); }
+    if (!dernier){ if (M.meteo) renderMeteo({erreur:'Météo indisponible pour le moment.'}); renderAgenda(null); $('#taches').innerHTML = '<p class="err">Tâches indisponibles pour le moment.</p>'; }
   } finally { enCours = false; }
 }
 charger();
 setInterval(() => { if (document.visibilityState === 'visible') charger(); }, 60000);
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') charger(); else stopCam(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') charger(); });
 })();
 </script>
 </body>

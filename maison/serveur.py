@@ -1,4 +1,4 @@
-"""Maison : tableau de bord de la maison (tâches, agenda, alarme, caméra) et ses sous-applis.
+"""Maison : tableau de bord de la maison (météo, agenda, tâches) et ses sous-applis.
 
 Lancement :   python serveur.py
 Garde-manger est servi à l'adresse /garde-manger/.
@@ -28,7 +28,6 @@ from agenda import Agenda  # noqa: E402
 from liens import soiree  # noqa: E402
 from rappels import Rappels, analyser_json, analyser_texte  # noqa: E402
 from meteo import ErreurMeteo, Meteo  # noqa: E402
-from smartlife import ErreurSmartLife, SmartLife  # noqa: E402
 
 MARQUEUR = "/*__MAISON__*/null"
 NOM_RACCOURCI = "Envoyer mes rappels"
@@ -64,7 +63,7 @@ class Redirection:
 
 
 def create_app(dossier_donnees=None, mot_de_passe=None, cle_raccourci=None, agenda="environnement",
-               smartlife="environnement", claude="environnement", fuseau=None, https=None, meteo="environnement"):
+               claude="environnement", fuseau=None, https=None, meteo="environnement"):
     env = os.environ
     dossier_donnees = dossier_donnees or env.get("MAISON_DONNEES") or os.path.join(DOSSIER, "donnees_utilisateur")
     os.makedirs(dossier_donnees, exist_ok=True)
@@ -73,8 +72,6 @@ def create_app(dossier_donnees=None, mot_de_passe=None, cle_raccourci=None, agen
     https = env.get("MAISON_HTTPS") == "1" if https is None else https
     if agenda == "environnement":
         agenda = Agenda.depuis_texte(env.get("MAISON_AGENDA_ICAL"), fuseau)
-    if smartlife == "environnement":
-        smartlife = SmartLife.depuis_environnement(env)
     if meteo == "environnement":
         meteo = Meteo.depuis_texte(env.get("MAISON_VILLE"))
     cle_secrete = env.get("MAISON_CLE_SECRETE") or _lire_ou_creer(os.path.join(dossier_donnees, ".cle_secrete"), 32)
@@ -139,8 +136,6 @@ def create_app(dossier_donnees=None, mot_de_passe=None, cle_raccourci=None, agen
         injecte = {
             "fuseau": fuseau,
             "agenda": agenda is not None,
-            "alarme": bool(smartlife and smartlife.alarme_id),
-            "camera": bool(smartlife and smartlife.camera_id),
             "raccourci": {"nom": NOM_RACCOURCI, "adresse": request.host_url.rstrip("/") + url_for("recevoir_rappels"), "cle": cle_raccourci},
             "motDePasse": bool(mot_de_passe),
             "mode": "serveur",
@@ -170,14 +165,6 @@ def create_app(dossier_donnees=None, mot_de_passe=None, cle_raccourci=None, agen
             except Exception:  # un agenda abîmé ne doit pas casser tout le tableau
                 app.logger.exception("agenda")
                 resultat["agenda"] = {"evenements": [], "erreurs": ["Agenda illisible"]}
-        if smartlife is not None and smartlife.alarme_id:
-            try:
-                resultat["alarme"] = smartlife.etat_alarme()
-            except ErreurSmartLife as e:
-                resultat["alarme"] = {"erreur": e.message}
-            except Exception:
-                app.logger.exception("smartlife")
-                resultat["alarme"] = {"erreur": "Smart Life ne répond pas"}
         _, etat = etat_gm.lire()
         courses = etat.get("courses") if isinstance(etat.get("courses"), list) else []
         placard = etat.get("pantry") if isinstance(etat.get("pantry"), list) else []
@@ -203,18 +190,6 @@ def create_app(dossier_donnees=None, mot_de_passe=None, cle_raccourci=None, agen
             return jsonify(code="bad_request", message=str(e)), 400
         contenu = rappels.enregistrer(liste)
         return jsonify(recus=len(liste), recu=contenu["recu"])
-
-    @app.post("/api/camera/direct")
-    def camera_direct():
-        if smartlife is None or not smartlife.camera_id:
-            return jsonify(code="non_configure", message="aucune caméra configurée"), 404
-        try:
-            return jsonify(url=smartlife.flux_camera())
-        except ErreurSmartLife as e:
-            return jsonify(code=e.code, message=e.message), 502
-        except Exception:
-            app.logger.exception("caméra")
-            return jsonify(code="smartlife", message="Smart Life ne répond pas"), 502
 
     # ---------- Sous-appli Garde-manger ----------
     sous_appli = garde_manger.create_app(dossier_donnees=dossier_gm, mot_de_passe=mot_de_passe, claude=claude,
@@ -251,7 +226,7 @@ def _adresse_locale():
 
 if __name__ == "__main__":
     if not os.environ.get("MAISON_MOT_DE_PASSE") and os.environ.get("MAISON_SANS_MOT_DE_PASSE") != "1":
-        sys.exit("Définissez MAISON_MOT_DE_PASSE : le tableau de bord montre votre caméra et votre agenda.\n"
+        sys.exit("Définissez MAISON_MOT_DE_PASSE : le tableau de bord montre votre agenda et vos tâches.\n"
                  "(Pour un essai sur votre seul ordinateur : MAISON_SANS_MOT_DE_PASSE=1.)")
     port = int(os.environ.get("PORT", os.environ.get("MAISON_PORT", "8000")))
     application = create_app()

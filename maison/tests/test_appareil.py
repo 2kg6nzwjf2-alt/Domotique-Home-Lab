@@ -15,8 +15,6 @@ sys.path.insert(0, ICI)
 import appli_locale  # noqa: E402
 import plateforme  # noqa: E402
 from liens import soiree  # noqa: E402
-from smartlife import SmartLife  # noqa: E402
-from tuya_cloud import signer  # noqa: E402
 
 PARIS = timezone(timedelta(hours=1))
 
@@ -48,10 +46,16 @@ def test_soiree_libre():
     assert soiree(None) is None
 
 
-def test_signature_tuya_de_reference():
-    # valeur calculée par tinytuya pour les mêmes paramètres
-    e = signer("CLIENTID123", "SECRETabc", "GET", "/v1.0/token?grant_type=1", t=1700000000000)
-    assert e["sign"] == "1E8827B5CBCBD42163E4FB7731811799BF938D3EAC13F77E464C93197A8FBA21"
+def test_reglages_et_anciennes_cles_effacees(tmp_path):
+    coffre = plateforme.CoffreFichier(str(tmp_path / "coffre.json"))
+    coffre.ecrire({"smartlife_cle": "ID", "smartlife_secret": "SECRET", "smartlife_alarme": "al1", "ville": "Lyon"})
+    a = appli_locale.Appli(str(tmp_path / "d"), plateforme.RappelsSimules(str(tmp_path / "r.json")), None, coffre)
+    assert coffre.lire() == {"ville": "Lyon"}  # Smart Life retiré : clés effacées du trousseau
+    r = a.enregistrer_reglages({"ville": "Brest", "liste_courses": "Épicerie", "agenda_ical": "https://x/basic.ics"})
+    assert r == {"ville": "Brest", "liste_courses": "Épicerie", "agenda_ical": True}
+    assert "https://x" not in json.dumps(r)  # l'adresse iCal secrète ne revient pas à la page
+    a.enregistrer_reglages({"agenda_ical": ""})
+    assert coffre.lire()["agenda_ical"] == "https://x/basic.ics"  # vide = conservée
 
 
 # ---------- Rappels simulés ----------
@@ -147,31 +151,6 @@ def test_etat_garde_manger_et_tableau(appli):
     assert c.json("GET", "/api/tableau")[1]["garde_manger"] == {"courses": ["Lait"], "a_finir": ["Courgettes"], "placard": 1}
     assert c.appel("PUT", "/garde-manger/api/etat", {"etat": [1]})[0] == 400
     assert "soiree" in injecte(c.appel("GET", "/garde-manger/")[1], "GM")  # calculé depuis l'agenda du jour
-
-
-def test_reglages_dans_le_trousseau(appli):
-    a, c, _, coffre = appli
-    statut, r = c.json("POST", "/api/reglages", {"smartlife_cle": "ID", "smartlife_secret": "SECRET", "smartlife_alarme": "al1",
-                                                  "smartlife_camera": "cam1", "liste_courses": "Épicerie"})
-    assert statut == 200 and r["smartlife_relie"] and r["liste_courses"] == "Épicerie"
-    assert "SECRET" not in json.dumps(r) and "SECRET" not in c.appel("GET", "/")[1]  # le secret ne revient jamais à la page
-    assert coffre.lire()["smartlife_secret"] == "SECRET"
-    c.json("POST", "/api/reglages", {"smartlife_secret": "", "liste_courses": "Épicerie"})
-    assert coffre.lire()["smartlife_secret"] == "SECRET"  # vide = conservé
-    m = injecte(c.appel("GET", "/")[1], "MAISON")
-    assert m["alarme"] and m["camera"]
-    # alarme et caméra avec un faux Tuya
-    sys.path.insert(0, os.path.join(ICI, "tests"))
-    from test_maison import FauxTuya
-    a._smartlife = SmartLife("eu", "ID", "SECRET", "al1", "cam1", fabrique=FauxTuya)
-    assert c.json("GET", "/api/tableau")[1]["alarme"]["libelle"] == "Activée (absence)"
-    assert c.json("POST", "/api/camera/direct") == (200, {"url": "https://flux.example/live.m3u8"})
-
-
-def test_camera_non_configuree(appli):
-    _, c, _, _ = appli
-    assert c.appel("POST", "/api/camera/direct", {})[0] == 404
-    assert c.appel("POST", "/garde-manger/api/claude/plat", {"nom": "x"})[0] == 503
 
 
 def test_meteo_dans_les_reglages(appli):

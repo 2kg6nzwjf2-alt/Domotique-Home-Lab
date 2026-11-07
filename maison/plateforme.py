@@ -281,6 +281,46 @@ class AgendaSimule:
         return {"jour": (jour or datetime.now().date()).isoformat(), "evenements": list(self.evenements), "erreurs": []}
 
 
+# ---------------------------------------------------------------- Code-barres
+
+class ScannerIOS:
+    """Photo avec l'appareil photo, puis lecture du code-barres par la reconnaissance d'images d'Apple (Vision)."""
+
+    TYPES = ("EAN13", "EAN8", "UPCE", "UPCA")
+
+    def __init__(self):
+        import photos  # noqa: F401  (vérifie que l'on est dans Pythonista)
+        from objc_util import ObjCClass
+        self._Requete = ObjCClass("VNDetectBarcodesRequest")
+        self._Lecteur = ObjCClass("VNImageRequestHandler")
+
+    def scanner(self):
+        """Renvoie le texte du code-barres, ou None si la photo est annulée. Lève ValueError si rien n'est lu."""
+        import io
+        import photos
+        from objc_util import ns
+        image = photos.capture_image()
+        if image is None:
+            return None
+        image = image.convert("RGB")
+        image.thumbnail((2000, 2000))
+        tampon = io.BytesIO()
+        image.save(tampon, "JPEG", quality=90)
+        requete = self._Requete.alloc().init()
+        lecteur = self._Lecteur.alloc().initWithData_options_(ns(tampon.getvalue()), ns({}))
+        lecteur.performRequests_error_(ns([requete]), None)
+        codes = []
+        for resultat in requete.results() or []:
+            texte = resultat.payloadStringValue()
+            if texte:
+                codes.append((str(resultat.symbology()), str(texte)))
+        # les codes de produits (EAN, UPC) passent avant les QR codes
+        codes.sort(key=lambda c: not any(t in c[0].upper() for t in self.TYPES))
+        if not codes:
+            raise ValueError("Aucun code-barres lu sur la photo : rapprochez-vous et évitez les reflets.")
+        return codes[0][1]
+
+
 # ---------------------------------------------------------------- Réglages secrets
 
 class CoffreIOS:

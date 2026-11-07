@@ -28,6 +28,7 @@ from plateforme import _cle_liste as plateforme_cle_liste  # noqa: E402
 from menage import Menage  # noqa: E402
 from meteo import ErreurMeteo, Meteo  # noqa: E402
 from stockage import EtatTropGros, Stockage  # noqa: E402  (garde-manger/stockage.py)
+from codes_barres import ErreurCode, OpenFoodFacts, code_valide  # noqa: E402  (garde-manger/codes_barres.py)
 
 MARQUEUR_MAISON = "/*__MAISON__*/null"
 MARQUEUR_GM = "/*__GARDE_MANGER__*/null"
@@ -42,8 +43,9 @@ def _json_page(valeur):
 class Appli:
     """Toute la logique de l'appli, indépendante du serveur HTTP (facile à tester)."""
 
-    def __init__(self, dossier_donnees, rappels, agenda_appareil, coffre):
+    def __init__(self, dossier_donnees, rappels, agenda_appareil, coffre, scanner=None, off=None):
         self.rappels, self.agenda_appareil, self.coffre = rappels, agenda_appareil, coffre
+        self.scanner, self.fiches = scanner, off or OpenFoodFacts()
         self.etat_gm = Stockage(os.path.join(dossier_donnees, "garde-manger", "etat.json"))
         self.menage = Menage(os.path.join(dossier_donnees, "menage.json"))
         with open(os.path.join(ICI, "templates", "tableau.html"), encoding="utf-8") as f:
@@ -169,7 +171,8 @@ class Appli:
     def page_garde_manger(self):
         version, etat = self.etat_gm.lire()
         injecte = {"donnees": donnees_gm.pour_interface(), "etat": etat, "version": version, "claude": False,
-                   "retour": "../", "rappels": True, "soiree": self.soiree()}
+                   "retour": "../", "rappels": True, "soiree": self.soiree(),
+                   "codes": True, "scanner": self.scanner is not None}
         return self.page_gm.replace(MARQUEUR_GM, _json_page(injecte))
 
 
@@ -239,6 +242,11 @@ class Gestionnaire(BaseHTTPRequestHandler):
         if chemin == "/garde-manger/api/etat":
             version, etat = a.etat_gm.lire()
             return self._envoyer(200, {"version": version, "etat": etat})
+        if chemin.startswith("/garde-manger/api/code/"):
+            try:
+                return self._envoyer(200, a.fiches.chercher(chemin.rsplit("/", 1)[1]))
+            except ErreurCode as e:
+                return self._envoyer(400 if e.code == "invalide" else 502, {"code": e.code, "message": e.message})
         if chemin == "/garde-manger/api/etat/version":
             return self._envoyer(200, {"version": a.etat_gm.lire()[0]})
         if chemin == "/garde-manger/manifest.webmanifest":
@@ -281,6 +289,17 @@ class Gestionnaire(BaseHTTPRequestHandler):
                     return self._envoyer(200, {"fait": a.menage.cocher(str(corps.get("tache") or ""), corps.get("date"), bool(corps.get("fait", True)))})
                 except ValueError as e:
                     return self._envoyer(400, {"code": "bad_request", "message": str(e)})
+            if chemin == "/garde-manger/api/scanner":
+                if a.scanner is None:
+                    return self._envoyer(404, {"code": "indisponible", "message": "Scan indisponible : tapez les chiffres du code-barres."})
+                try:
+                    texte = a.scanner.scanner()
+                except ValueError as e:
+                    return self._envoyer(200, {"erreur": str(e)})
+                if texte is None:
+                    return self._envoyer(200, {"annule": True})
+                code = code_valide(texte)
+                return self._envoyer(200, {"code": code} if code else {"erreur": f"Le code lu ({texte[:30]}) n'est pas un code-barres de produit."})
             if chemin == "/garde-manger/api/courses/rappels":
                 return self._envoyer(200, a.courses_vers_rappels(corps))
             if chemin.startswith("/garde-manger/api/claude/"):

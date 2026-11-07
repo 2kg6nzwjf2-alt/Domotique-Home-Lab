@@ -9,6 +9,7 @@ L'appli Maison (tableau de bord et Garde-manger) tourne directement sur l'iPhone
 | Agenda du jour | calendrier de l'iPhone (ajoutez-y votre compte Google), ou adresse iCal de Google |
 | Ménage | plan de l'appartement, pièces à nettoyer surlignées, tâches du jour à cocher, planning modifiable ; partagé par iCloud |
 | Garde-manger | hors connexion ; placard et courses partagés par iCloud entre l'iPhone et l'iPad |
+| Codes-barres | dans Garde-manger, **Scanner un code-barres** prend une photo du code et range le produit au placard (fiche Open Food Facts) |
 | Courses | les ingrédients manquants d'une recette sont ajoutés à votre liste Rappels « Courses » |
 | Ce soir | Garde-manger propose une recette rapide si la soirée est chargée, et rien si vous dînez dehors |
 
@@ -18,7 +19,7 @@ L'appli Maison (tableau de bord et Garde-manger) tourne directement sur l'iPhone
 2. Ouvrez [installer.py sur GitHub](https://github.com/2kg6nzwjf2-alt/Domotique-Home-Lab/blob/main/pythonista/installer.py), touchez **Raw**, puis copiez tout le texte.
 3. Dans Pythonista, touchez **+**, puis **Empty Script**, nommez-le `installer`, collez le texte et touchez **▶**.
 4. Quand le message « C'est installé » apparaît, ouvrez le dossier **Maison** (dans iCloud), puis **Maison.py**, et touchez **▶**.
-5. Au premier lancement, autorisez Pythonista à accéder aux **Rappels** et au **Calendrier**.
+5. Au premier lancement, autorisez Pythonista à accéder aux **Rappels** et au **Calendrier**, puis à l'**appareil photo** au premier scan de code-barres.
 
 Sur l'iPad : le dossier Maison arrive par iCloud. Lancez une fois **Mettre à jour.py**, qui installe les bibliothèques sur l'iPad, puis **Maison.py**.
 

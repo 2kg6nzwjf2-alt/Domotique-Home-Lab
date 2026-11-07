@@ -37,11 +37,17 @@ def creer_appli():
             print("Calendrier indisponible :", e)
             agenda = None
         coffre = plateforme.CoffreIOS()
+        try:
+            scanner = plateforme.ScannerIOS()
+        except Exception as e:
+            print("Scan des codes-barres indisponible :", e)
+            scanner = None
     else:
         rappels = plateforme.RappelsSimules(os.path.join(DONNEES, "rappels-demo.json"))
         agenda = plateforme.AgendaSimule()
         coffre = plateforme.CoffreFichier(os.path.join(DONNEES, "reglages-demo.json"))
-    return appli_locale.Appli(DONNEES, rappels, agenda, coffre)
+        scanner = None
+    return appli_locale.Appli(DONNEES, rappels, agenda, coffre, scanner=scanner)
 
 
 def main():

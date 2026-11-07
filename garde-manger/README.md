@@ -68,6 +68,15 @@ GM_MOT_DE_PASSE="mon-mot-de-passe" ANTHROPIC_API_KEY="sk-ant-..." python app.py
 
 Sans mot de passe, toute personne connectée à votre Wi-Fi peut ouvrir l'appli. C'est acceptable à la maison, pas sur un réseau public.
 
+## Codes-barres
+
+Sous « Ajouter au placard », le bouton **Code-barres** retrouve un produit à partir des chiffres de son code-barres (EAN-13, EAN-8 ou UPC). La fiche vient d'[Open Food Facts](https://world.openfoodfacts.org), une base collaborative gratuite et sans compte : seul le numéro lui est envoyé.
+
+- Le produit est rangé dans l'ingrédient le plus proche du catalogue (une bouteille de vinaigre de cidre Rustica devient « Vinaigre »), avec sa quantité (75 cl). Le bouton « Ajouter sous … » garde le nom exact.
+- Si le produit est déjà dans le placard, la quantité s'ajoute : pratique au retour des courses.
+- Un produit absent d'Open Food Facts peut être nommé une fois : l'appli s'en souvient au scan suivant.
+- Dans la version Pythonista, le bouton devient **Scanner un code-barres** : il prend une photo et lit le code avec l'appareil photo.
+
 ## Fonctions Claude (facultatives)
 
 Avec une clé API Anthropic (créée sur [platform.claude.com](https://platform.claude.com)), trois fonctions s'ajoutent :
@@ -96,6 +105,7 @@ L'appli peut tourner chez un hébergeur Python. Elle utilise la variable `PORT` 
 | `app.py` | Serveur Flask : pages, connexion, enregistrement du placard, appels à Claude. |
 | `donnees.py` | Produits connus et carnet de recettes. Ajoutez vos recettes ici. |
 | `service_claude.py` | Consignes envoyées à Claude et lecture de ses réponses. |
+| `codes_barres.py` | Vérification des codes-barres et fiche produit Open Food Facts. |
 | `stockage.py` | Enregistrement de l'état dans un fichier JSON. |
 | `construire_page.py` | Construit la version statique pour GitHub Pages. |
 | `templates/index.html` | Interface affichée dans Safari. |

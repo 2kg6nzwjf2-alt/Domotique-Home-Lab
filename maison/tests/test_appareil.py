@@ -243,3 +243,49 @@ def test_menage_version_pythonista(appli):
     assert c.json("POST", "/api/menage/cocher", {"tache": t, "date": "hier"})[0] == 400
     statut, r = c.json("PUT", "/api/menage/taches", {"taches": [{"piece": "cuisine", "titre": "Poubelles", "jours": [1, 4]}]})
     assert statut == 200 and r["taches"][0]["jours"] == [1, 4]
+
+
+# ---------- Code-barres (version Pythonista) ----------
+class FauxOFF:
+    def chercher(self, texte):
+        from codes_barres import ErreurCode, code_valide
+        if not code_valide(texte):
+            raise ErreurCode("invalide", "invalide")
+        return {"code": texte, "trouve": True, "nom": "Vinaigre de cidre"}
+
+
+class FauxScanner:
+    def __init__(self, resultats):
+        self.resultats = list(resultats)
+
+    def scanner(self):
+        r = self.resultats.pop(0)
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+
+def test_code_barres_version_pythonista(tmp_path):
+    rappels = plateforme.RappelsSimules(str(tmp_path / "rappels.json"))
+    coffre = plateforme.CoffreFichier(str(tmp_path / "coffre.json"))
+    scanner = FauxScanner(["3564700013342", None, ValueError("Aucun code-barres lu"), "https://exemple.fr"])
+    a = appli_locale.Appli(str(tmp_path / "d"), rappels, None, coffre, scanner=scanner, off=FauxOFF())
+    serveur, adresse = appli_locale.demarrer(a)
+    try:
+        c = Client(adresse)
+        gm = injecte(c.appel("GET", "/garde-manger/")[1], "GM")
+        assert gm["codes"] is True and gm["scanner"] is True
+        assert c.json("GET", "/garde-manger/api/code/3564700013342")[1]["nom"] == "Vinaigre de cidre"
+        assert c.json("GET", "/garde-manger/api/code/123")[0] == 400
+        assert c.json("POST", "/garde-manger/api/scanner", {}) == (200, {"code": "3564700013342"})
+        assert c.json("POST", "/garde-manger/api/scanner", {}) == (200, {"annule": True})
+        assert c.json("POST", "/garde-manger/api/scanner", {})[1] == {"erreur": "Aucun code-barres lu"}
+        assert "n'est pas un code-barres" in c.json("POST", "/garde-manger/api/scanner", {})[1]["erreur"]
+    finally:
+        serveur.shutdown()
+
+
+def test_sans_scanner(appli):
+    _, c, _, _ = appli
+    assert injecte(c.appel("GET", "/garde-manger/")[1], "GM")["scanner"] is False
+    assert c.json("POST", "/garde-manger/api/scanner", {})[0] == 404

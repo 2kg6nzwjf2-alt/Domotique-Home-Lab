@@ -282,6 +282,10 @@ form.add{position:relative}
           <button class="btn" type="submit">Ajouter</button>
         </form>
         <datalist id="ingList"></datalist>
+        <div class="row" id="scanRow" hidden>
+          <button class="btn ghost small" type="button" id="scanGo">Scanner un code-barres</button>
+          <span class="status" id="scanStatus"></span>
+        </div>
         <div class="row" id="photoRow" hidden>
           <label class="btn ghost small" for="photo" style="cursor:pointer">Photo du frigo</label>
           <input type="file" id="photo" accept="image/*" class="sr">
@@ -1330,6 +1334,142 @@ const claudeErr = code => ({
   offline:'Le serveur ne répond pas. Vérifiez que l’ordinateur qui fait tourner l’appli est allumé.',
 }[code] || 'Claude n’a pas répondu. Réessayez dans un instant.');
 const mesUstensiles = () => [...tools].map(k => TOOL[k]);
+
+// ---------- Code-barres : fiche Open Food Facts et rangement dans le placard ----------
+function codeValide(texte){
+  let c = String(texte || '').replace(/\D/g, '');
+  if (c.length === 12) c = '0' + c;
+  if (c.length !== 8 && c.length !== 13) return null;
+  const corps = c.slice(0, -1).split('').reverse();
+  const total = corps.reduce((s, ch, i) => s + (+ch) * (i % 2 === 0 ? 3 : 1), 0);
+  return (10 - total % 10) % 10 === +c.slice(-1) ? c : null;
+}
+// « 400 g », « 75 cl », « 6 x 125 g » → {n, u} ; rien de lisible → null
+function qteTexte(q){
+  const t = String(q || '').toLowerCase().replace(/(\d),(\d)/g, '$1.$2');
+  let m = t.match(/(\d+)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(kg|g|cl|ml|l)\b/);
+  if (m) return {n: +m[1] * +m[2], u: m[3]};
+  m = t.match(/(\d+(?:\.\d+)?)\s*(kg|g|cl|ml|l)\b/);
+  return m ? {n: +m[1], u: m[2]} : null;
+}
+async function ficheProduit(code){
+  if (GM.statique){  // version en ligne : Open Food Facts directement depuis le navigateur
+    const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,product_name_fr,generic_name_fr,brands,quantity,categories`);
+    const d = await r.json().catch(() => ({}));
+    const p = d.status === 1 ? d.product : null;
+    const nom = (p?.product_name_fr || p?.product_name || '').trim();
+    return {code, trouve: !!(p && nom), nom, marque: String(p?.brands || '').split(',')[0].trim(), quantite: String(p?.quantity || ''),
+            generique: p?.generic_name_fr || '', categories: String(p?.categories || '').split(',').map(x => x.trim()).filter(Boolean).slice(-8)};
+  }
+  const r = await fetch('api/code/' + code);
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.message || 'Open Food Facts ne répond pas.');
+  return d;
+}
+// le produit du catalogue le plus proche : nom, puis nom générique, puis catégories (de la plus précise à la plus large)
+function produitCatalogue(f){
+  for (const t of [f.nom, f.generique, ...[...(f.categories || [])].reverse()]){ const k = t && resolve(t); if (k) return k; }
+  return null;
+}
+function rangerProduit(label, qte){
+  touch();
+  const avant = new Set(pantry.map(p => p.id));
+  addIngredient(label);
+  const k = resolve(label), id = k || ('x:' + norm(label));
+  const p = pantry.find(x => x.id === id);
+  if (p && qte){
+    if (avant.has(id)){
+      // déjà dans le placard : la quantité scannée s'ajoute (retour des courses)
+      if (p.n != null && UNIT[p.u]){ const v = conv(qte.n, qte.u, id, UNIT[p.u].dim); if (v != null) p.n = Math.round((p.n + v / UNIT[p.u].f) * 100) / 100; }
+    } else { p.n = qte.n; p.u = qte.u; }
+  }
+  update();
+  toast(p && avant.has(id) ? `${label} : quantité ajoutée` : `${label} ajouté au placard`);
+}
+function fenetreScan(contenu){
+  const body = $('#dBody');
+  body.innerHTML = `<button class="close" type="button" aria-label="Fermer">×</button>${contenu}`;
+  body.querySelector('.close').onclick = () => dlg.close();
+  dlg.style.position = 'fixed';
+  if (!dlg.open) dlg.showModal();
+  return body;
+}
+function saisirCode(message){
+  const body = fenetreScan(`<h2 id="dName">Code-barres</h2>
+    <form class="editor" id="codeForm" autocomplete="off">
+      ${message ? `<p class="hint" style="color:var(--miss)">${esc(message)}</p>` : ''}
+      <label class="eyebrow" for="codeChiffres">Tapez les chiffres sous le code-barres</label>
+      <input id="codeChiffres" inputmode="numeric" placeholder="Ex. 3564700013342" style="border:1.5px solid var(--line);background:var(--bg);border-radius:10px;padding:10px 12px;font-family:var(--f-mono);font-size:17px">
+      <div class="row"><button class="btn" type="submit">Chercher le produit</button></div>
+    </form>`);
+  body.querySelector('#codeForm').onsubmit = e => { e.preventDefault(); chercherCode(body.querySelector('#codeChiffres').value); };
+  body.querySelector('#codeChiffres').focus();
+}
+async function chercherCode(texte){
+  const code = codeValide(texte);
+  if (!code){ saisirCode('Ce code n’est pas valide : vérifiez les 13 chiffres (ou 8 sur les petits produits).'); return; }
+  const memoire = store.get('codes', {})[code];
+  if (memoire){ ficheScan({code, trouve:true, nom: memoire.label, quantite: memoire.quantite || '', marque: memoire.marque || '', memoire: true}); return; }
+  fenetreScan(`<h2 id="dName">Code ${code}</h2><p class="status dots">Recherche du produit</p>`);
+  try { ficheScan(await ficheProduit(code)); }
+  catch (e) { saisirCode(e.message || 'Open Food Facts ne répond pas. Vérifiez la connexion.'); }
+}
+function ficheScan(f){
+  const retenir = (label) => {
+    const c = store.get('codes', {});
+    c[f.code] = {label, ...(f.quantite ? {quantite: String(f.quantite).slice(0, 40)} : {}), ...(f.marque ? {marque: String(f.marque).slice(0, 60)} : {})};
+    const cles = Object.keys(c); if (cles.length > 400) delete c[cles[0]];  // garde les 400 derniers codes
+    store.set('codes', c);
+  };
+  if (!f.trouve){
+    const body = fenetreScan(`<h2 id="dName">Produit inconnu</h2>
+      <form class="editor" id="nomForm" autocomplete="off">
+        <p class="hint">Le code ${esc(f.code)} n’est pas dans Open Food Facts. Donnez-lui un nom : il sera reconnu au prochain scan.</p>
+        <input id="nomProduit" placeholder="Ex. Vinaigre de cidre" maxlength="80" style="border:1.5px solid var(--line);background:var(--bg);border-radius:10px;padding:10px 12px">
+        <div class="row"><button class="btn" type="submit">Ajouter au placard</button></div>
+      </form>`);
+    body.querySelector('#nomForm').onsubmit = e => {
+      e.preventDefault();
+      const nom = body.querySelector('#nomProduit').value.trim(); if (!nom) return;
+      const k = resolve(nom), label = k ? ING[k].label : nom;
+      retenir(label); dlg.close(); rangerProduit(label, null);
+    };
+    body.querySelector('#nomProduit').focus();
+    return;
+  }
+  const k = f.memoire ? resolve(f.nom) : produitCatalogue(f);
+  const qte = qteTexte(f.quantite);
+  const propre = [f.nom, f.marque].filter(Boolean).join(' ');
+  const choix = k ? ING[k].label : f.nom;
+  const body = fenetreScan(`<h2 id="dName">${esc(f.nom)}</h2>
+    <p class="meta"><span>${esc([f.marque, f.quantite].filter(Boolean).join(' · ') || 'Code ' + f.code)}</span></p>
+    <div class="editor">
+      ${k ? `<p>Rangé dans <b>${esc(ING[k].label)}</b> <span class="hint">(${esc(CATS[ING[k].cat] || '')})</span></p>` : `<p>Ajouté sous son nom : <b>${esc(f.nom)}</b></p>`}
+      ${qte ? `<p class="hint">Quantité : ${esc(fmtAmt(qte.n, qte.u))}. Si le produit est déjà dans le placard, elle s’ajoute.</p>` : ''}
+      <div class="row">
+        <button class="btn" type="button" id="scanOk">Ajouter au placard</button>
+        ${k && !f.memoire ? `<button class="btn ghost" type="button" id="scanPropre">Ajouter sous « ${esc(f.nom)} »</button>` : ''}
+      </div>
+      ${f.memoire ? '' : '<p class="hint">Fiche Open Food Facts (base collaborative).</p>'}
+    </div>`);
+  body.querySelector('#scanOk').onclick = () => { retenir(choix); dlg.close(); rangerProduit(choix, qte); };
+  body.querySelector('#scanPropre')?.addEventListener('click', () => { retenir(f.nom); dlg.close(); rangerProduit(f.nom, qte); });
+}
+if (GM.codes || GM.statique){
+  $('#scanRow').hidden = false;
+  if (!GM.scanner) $('#scanGo').textContent = 'Code-barres';
+  $('#scanGo').onclick = async () => {
+    if (!GM.scanner){ saisirCode(); return; }
+    const st = $('#scanStatus'); st.className = 'status dots'; st.textContent = 'Photo du code-barres';
+    try {
+      const r = await fetch('api/scanner', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+      const d = await r.json().catch(() => ({}));
+      st.className = 'status'; st.textContent = '';
+      if (d.annule) return;
+      if (d.code) chercherCode(d.code); else saisirCode(d.erreur || d.message || 'Code-barres illisible.');
+    } catch { st.className = 'status'; st.textContent = ''; saisirCode('Scan impossible : tapez les chiffres.'); }
+  };
+}
 
 if (GM.claude) {
   // Plat cherché par son nom

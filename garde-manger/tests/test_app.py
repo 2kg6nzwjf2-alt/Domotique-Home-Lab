@@ -193,3 +193,70 @@ def test_catalogue_de_produits():
     assert "nutella" in noms["Pâte à tartiner"][2] and "nesquik" in noms["Chocolat en poudre"][2]
     assert {rayon for _, _, rayon, _ in donnees.PRODUITS} <= set(donnees.RAYONS)
     assert donnees.pour_interface()["rayons"] == donnees.RAYONS
+
+
+# ---------- Codes-barres ----------
+from codes_barres import ErreurCode, OpenFoodFacts, code_valide  # noqa: E402
+
+
+class FausseReponse:
+    def __init__(self, statut, donnees):
+        self.status_code, self._donnees = statut, donnees
+
+    def json(self):
+        return self._donnees
+
+
+class FausseSession:
+    def __init__(self, reponses):
+        self.reponses, self.appels = dict(reponses), []
+
+    def get(self, adresse, params=None, headers=None, timeout=None):
+        self.appels.append(adresse)
+        reponse = self.reponses.get(adresse.rsplit("/", 1)[1].split(".")[0])
+        if isinstance(reponse, Exception):
+            raise reponse
+        return reponse or FausseReponse(404, {"status": 0})
+
+
+VINAIGRE = {"status": 1, "product": {"product_name_fr": "Vinaigre de cidre", "brands": "Rustica,Carrefour",
+                                     "quantity": "75 cl", "categories": "Condiments, Vinaigres, Vinaigres de cidre"}}
+
+
+def test_code_valide():
+    assert code_valide("3564700013342") == "3564700013342"
+    assert code_valide("3 017620 422003") == "3017620422003"
+    assert code_valide("3564700013343") is None  # mauvaise clé de contrôle
+    assert code_valide("012345678905") == "0012345678905"  # UPC-A
+    assert code_valide("96385074") == "96385074"  # EAN-8
+    assert code_valide("123") is None and code_valide(None) is None
+
+
+def test_open_food_facts_avec_fausse_session():
+    import requests
+    session = FausseSession({"3564700013342": FausseReponse(200, VINAIGRE),
+                             "3017620422003": requests.ConnectionError("hors ligne")})
+    off = OpenFoodFacts(session)
+    f = off.chercher("3564700013342")
+    assert f["trouve"] and f["nom"] == "Vinaigre de cidre" and f["marque"] == "Rustica" and f["quantite"] == "75 cl"
+    assert f["categories"][-1] == "Vinaigres de cidre"
+    off.chercher("3564700013342")
+    assert len(session.appels) == 1  # gardé en mémoire
+    assert off.chercher("96385074") == {"code": "96385074", "trouve": False}
+    with pytest.raises(ErreurCode) as e:
+        off.chercher("3017620422003")
+    assert e.value.code == "reseau"
+    with pytest.raises(ErreurCode) as e:
+        off.chercher("3564700013343")
+    assert e.value.code == "invalide"
+
+
+def test_route_code_barres(tmp_path):
+    import requests
+    session = FausseSession({"3564700013342": FausseReponse(200, VINAIGRE),
+                             "3017620422003": requests.Timeout()})
+    c = create_app(dossier_donnees=str(tmp_path), mot_de_passe="", claude=None, off=OpenFoodFacts(session)).test_client()
+    r = c.get("/api/code/3564700013342")
+    assert r.status_code == 200 and r.get_json()["nom"] == "Vinaigre de cidre"
+    assert c.get("/api/code/3564700013343").status_code == 400
+    assert c.get("/api/code/3017620422003").status_code == 502

@@ -15,6 +15,7 @@ from datetime import timedelta
 from flask import Flask, Response, jsonify, redirect, request, send_from_directory, session, url_for
 
 import donnees
+from codes_barres import ErreurCode, OpenFoodFacts
 from service_claude import ErreurClaude, ServiceClaude
 from stockage import EtatTropGros, Stockage
 
@@ -64,7 +65,7 @@ def _liste_textes(valeur, nombre=40, longueur=80):
     return [_texte(v, longueur) for v in valeur[:nombre] if _texte(v, longueur)]
 
 
-def create_app(dossier_donnees=None, mot_de_passe=None, claude="environnement", cle_secrete=None, retour=None, soiree=None):
+def create_app(dossier_donnees=None, mot_de_passe=None, claude="environnement", cle_secrete=None, retour=None, soiree=None, off=None):
     """`cle_secrete`, `retour` et `soiree` servent quand Garde-manger est une sous-appli du tableau de bord Maison.
 
     `soiree` : fonction sans argument qui renvoie le repas dehors ou la soirée chargée du jour (ou None).
@@ -122,6 +123,7 @@ def create_app(dossier_donnees=None, mot_de_passe=None, claude="environnement", 
             "claude": claude is not None,
             "retour": retour,
             "soiree": _soiree(soiree),
+            "codes": True,
         }
         # « </ » échappé pour qu'aucun texte ne puisse fermer la balise <script>
         json_injecte = json.dumps(injecte, ensure_ascii=False).replace("</", "<\\/")
@@ -163,6 +165,16 @@ def create_app(dossier_donnees=None, mot_de_passe=None, claude="environnement", 
             return jsonify(fonction())
         except ErreurClaude as e:
             return jsonify(code=e.code, message=e.message), e.statut
+
+    # ---------- Code-barres ----------
+    fiches = off or OpenFoodFacts()
+
+    @app.get("/api/code/<code>")
+    def code_barres(code):
+        try:
+            return jsonify(fiches.chercher(code))
+        except ErreurCode as e:
+            return jsonify(code=e.code, message=e.message), 400 if e.code == "invalide" else 502
 
     @app.post("/api/claude/plat")
     def claude_plat():

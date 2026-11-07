@@ -70,6 +70,51 @@ button.dot:hover{border-color:var(--ok);background:var(--ok-soft)}
 .credit{font-size:11px;color:var(--muted);margin:0}
 .credit a{color:inherit}
 
+/* ménage */
+#carteMenage{grid-column:1 / -1}
+.semaine{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.semaine button{border:0;border-radius:10px;padding:6px 0 7px;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;align-items:center;gap:1px;font-size:12px;font-weight:600;position:relative}
+.semaine button b{font-family:var(--f-mono);font-size:15px;font-weight:500}
+.semaine button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.semaine button.auj:not([aria-pressed="true"]){box-shadow:inset 0 0 0 1.5px var(--accent)}
+.semaine button i{position:absolute;top:5px;right:6px;width:7px;height:7px;border-radius:50%;background:var(--warn)}
+.semaine button i.retard{background:var(--bad)}
+.semaine button i.ok{background:var(--ok)}
+.menage-corps{display:grid;gap:14px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:700px){.menage-corps{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);align-items:start}}
+.plan svg{width:100%;height:auto;max-height:440px;display:block}
+.plan .piece rect{fill:var(--surface);stroke:var(--ink);stroke-width:7;cursor:pointer;transition:fill .2s}
+.plan .piece.a-faire rect{fill:var(--warn-soft)}
+.plan .piece.fait rect{fill:var(--ok-soft)}
+.plan .piece.choisie rect{stroke:var(--accent);stroke-width:12}
+.plan .piece text{fill:var(--ink);font-family:var(--f-body);font-weight:600;text-anchor:middle;pointer-events:none}
+.plan .piece .nb{fill:var(--warn)}
+.plan .piece .nb-t{fill:#fff;font-family:var(--f-mono);font-weight:700}
+.plan .piece.fait .coche{fill:var(--ok)}
+.plan .trait{stroke:var(--ink);stroke-width:6;stroke-linecap:round}
+.plan .legende{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:6px}
+.plan .legende span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px;background:var(--surface);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.plan .legende .l-a::before{background:var(--warn-soft)} .plan .legende .l-f::before{background:var(--ok-soft)}
+.corvees{display:flex;flex-direction:column;gap:12px}
+.corvees h3{margin:0 0 2px;font-size:14px;display:flex;gap:8px;align-items:baseline}
+.corvees ul{list-style:none;margin:0;padding:0}
+.corvees li{display:flex;gap:10px;align-items:center;padding:5px 0}
+.corvees li.fait span{text-decoration:line-through;color:var(--muted)}
+.case{width:22px;height:22px;border-radius:7px;border:1.5px solid var(--line);background:var(--surface);flex:none;display:grid;place-items:center;padding:0;color:var(--accent-ink);font-size:14px;line-height:1}
+.fait .case{background:var(--ok);border-color:var(--ok)}
+dialog#dlgMenage{border:0;border-radius:16px;padding:0;background:var(--surface);color:var(--ink);width:min(680px,calc(100vw - 24px));max-height:calc(100vh - 48px);box-shadow:0 20px 60px rgba(0,0,0,.35)}
+dialog#dlgMenage::backdrop{background:rgba(10,16,30,.5)}
+.editeur{padding:18px;display:flex;flex-direction:column;gap:12px}
+.editeur h2{margin:0;font-family:var(--f-display);font-size:21px}
+.ligne-t{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 8px;padding:10px 0;border-top:1px solid var(--line)}
+.ligne-t .champs{display:flex;gap:8px;flex-wrap:wrap;min-width:0}
+.ligne-t select,.ligne-t input{font:inherit;color:var(--ink);border:1.5px solid var(--line);background:var(--bg);border-radius:9px;padding:7px 9px;min-width:0}
+.ligne-t input{flex:1 1 160px}
+.jours{display:flex;gap:4px;grid-column:1 / -1}
+.jours button{width:34px;height:30px;border-radius:8px;border:1.5px solid var(--line);background:var(--surface);font-weight:600;font-size:12.5px;color:var(--muted)}
+.jours button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.suppr{border:0;background:none;color:var(--bad);font-size:20px;line-height:1;padding:4px 8px}
+
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px;align-items:start}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px;min-width:0}
 .card h2{font-family:var(--f-display);font-weight:800;font-size:19px;margin:0;letter-spacing:-.01em}
@@ -191,6 +236,15 @@ ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;m
       <div id="taches"><p class="hint dots">Chargement</p></div>
     </section>
 
+    <section class="card" id="carteMenage" aria-labelledby="h-menage">
+      <div class="head"><h2 id="h-menage">Ménage</h2><button class="btn ghost small" type="button" id="menageModifier">Modifier le planning</button></div>
+      <div class="semaine" id="semaine" role="group" aria-label="Jour de la semaine"></div>
+      <div class="menage-corps">
+        <div class="plan" id="plan"></div>
+        <div class="corvees" id="corvees"><p class="hint dots">Chargement</p></div>
+      </div>
+    </section>
+
     <section class="card" aria-labelledby="h-gm">
       <a class="app" href="garde-manger/">
         <img src="garde-manger/static/apple-touch-icon.png" alt="">
@@ -227,6 +281,7 @@ ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;m
   </section>
 </div>
 
+<dialog id="dlgMenage" aria-labelledby="h-edit"><div class="editeur" id="editeur"></div></dialog>
 <script>
 (() => {
 const M = window.MAISON || {};
@@ -236,7 +291,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const TZ = M.fuseau || undefined;  // sans fuseau : heure de l'appareil
 const fmt = (opts, d=new Date()) => new Intl.DateTimeFormat('fr-FR', {timeZone:TZ, ...opts}).format(d);
 const heure = d => fmt({hour:'2-digit', minute:'2-digit'}, d);
-const jourCle = d => fmt({year:'numeric', month:'2-digit', day:'2-digit'}, d);
+const jourCle = d => new Intl.DateTimeFormat('en-CA', {timeZone:TZ, year:'numeric', month:'2-digit', day:'2-digit'}).format(d);  // AAAA-MM-JJ, comparable
 
 function horloge(){
   $('#clock').textContent = heure(new Date());
@@ -390,6 +445,124 @@ $('#sync').href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(M.raccou
 $('#sync').hidden = APPAREIL;
 
 
+// ---------- Ménage : plan, semaine et tâches à cocher ----------
+const NOMS_JOURS = ['L','M','M','J','V','S','D'], JOURS_LONGS = ['lundi','mardi','mercredi','jeudi','vendredi','samedi','dimanche'];
+const isoUTC = d => d.toISOString().slice(0, 10);
+const jourSemaine = iso => (new Date(iso + 'T12:00:00Z').getUTCDay() + 6) % 7;  // 0 = lundi
+let menage = null, jourChoisi = null, jourManuel = false, pieceChoisie = null;
+function semaineDe(iso){
+  const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() - jourSemaine(iso));
+  return Array.from({length:7}, (_, i) => { const x = new Date(d); x.setUTCDate(d.getUTCDate() + i); return isoUTC(x); });
+}
+const tachesDu = iso => (menage?.taches || []).filter(t => t.jours.includes(jourSemaine(iso)));
+const faitesDu = iso => new Set(menage?.fait?.[iso] || []);
+function renderMenage(m){
+  if (m) menage = m;
+  if (!menage) return;
+  const auj = jourCle(new Date());
+  if (!jourManuel || !jourChoisi) jourChoisi = auj;  // suit le jour qui change, sauf si on a choisi un autre jour
+  // semaine
+  $('#semaine').innerHTML = semaineDe(jourChoisi).map((iso, i) => {
+    const reste = tachesDu(iso).filter(t => !faitesDu(iso).has(t.id)).length, total = tachesDu(iso).length;
+    const point = !total ? '' : !reste ? '<i class="ok"></i>' : iso < auj ? '<i class="retard"></i>' : '<i></i>';
+    return `<button type="button" data-j="${iso}" aria-pressed="${iso===jourChoisi}" class="${iso===auj?'auj':''}" aria-label="${JOURS_LONGS[i]} ${+iso.slice(8)}${reste?`, ${reste} à faire`:''}">${NOMS_JOURS[i]}<b>${+iso.slice(8)}</b>${point}</button>`;
+  }).join('');
+  $('#semaine').querySelectorAll('button').forEach(b => b.onclick = () => { jourChoisi = b.dataset.j; jourManuel = b.dataset.j !== auj; renderMenage(); });
+  // plan : pièces surlignées selon les tâches du jour choisi
+  const plan = menage.plan, du = tachesDu(jourChoisi), faites = faitesDu(jourChoisi);
+  const pieces = plan.pieces.map(p => {
+    const ts = du.filter(t => t.piece === p.id), reste = ts.filter(t => !faites.has(t.id)).length;
+    const etat = !ts.length ? '' : reste ? 'a-faire' : 'fait';
+    const taille = Math.min(36, Math.max(22, p.l / 7));
+    const mots = p.nom.split(' '), ligneMax = Math.floor((p.l - 30) / (taille * 0.56));
+    const lignes = []; for (const m of mots){ const l = lignes.length ? lignes[lignes.length-1] : null; if (l && (l + ' ' + m).length <= ligneMax) lignes[lignes.length-1] = l + ' ' + m; else lignes.push(m); }
+    const cx = p.tx ?? p.x + p.l / 2, cy = p.y + p.h / 2 - (lignes.length - 1) * taille * 0.55;  // tx : nom décalé (cloison)
+    const texte = lignes.map((l, i) => `<text x="${cx}" y="${cy + i * taille * 1.1}" font-size="${taille}" dominant-baseline="middle">${esc(l)}</text>`).join('');
+    const badge = !ts.length ? '' : reste
+      ? `<circle class="nb" cx="${p.x + p.l - 30}" cy="${p.y + 30}" r="20"/><text class="nb-t" x="${p.x + p.l - 30}" y="${p.y + 31}" font-size="22" dominant-baseline="middle">${reste}</text>`
+      : `<circle class="coche" cx="${p.x + p.l - 30}" cy="${p.y + 30}" r="20"/><text class="nb-t" x="${p.x + p.l - 30}" y="${p.y + 31}" font-size="22" dominant-baseline="middle">✓</text>`;
+    return `<g class="piece ${etat} ${pieceChoisie===p.id?'choisie':''}" data-p="${p.id}" role="button" tabindex="0" aria-label="${esc(p.nom)}${reste?` : ${reste} tâche${reste>1?'s':''} à faire`:''}"><rect x="${p.x}" y="${p.y}" width="${p.l}" height="${p.h}" rx="6"/>${texte}${badge}</g>`;
+  }).join('');
+  const traits = (plan.traits || []).map(([x1,y1,x2,y2]) => `<line class="trait" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`).join('');
+  $('#plan').innerHTML = `<svg viewBox="${plan.origine[0]} ${plan.origine[1]} ${plan.largeur} ${plan.hauteur}" role="img" aria-label="Plan de l'appartement">${pieces}${traits}</svg>
+    <div class="legende"><span class="l-a">À faire</span><span class="l-f">Fait</span><span>Rien ce jour-là</span></div>`;
+  $('#plan').querySelectorAll('.piece').forEach(g => {
+    const choisir = () => { pieceChoisie = pieceChoisie === g.dataset.p ? null : g.dataset.p; renderMenage(); };
+    g.onclick = choisir; g.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choisir(); } };
+  });
+  // liste des tâches du jour, par pièce
+  const nomPiece = Object.fromEntries(plan.pieces.map(p => [p.id, p.nom]));
+  const groupes = plan.pieces.map(p => [p, du.filter(t => t.piece === p.id)]).filter(([p, ts]) => ts.length && (!pieceChoisie || p.id === pieceChoisie));
+  const titreJour = jourChoisi === auj ? 'Aujourd’hui' : JOURS_LONGS[jourSemaine(jourChoisi)].replace(/^./, c => c.toUpperCase()) + ' ' + (+jourChoisi.slice(8));
+  let html = `<p class="eyebrow">${esc(titreJour)}${pieceChoisie ? ' · ' + esc(nomPiece[pieceChoisie]) + ' <button type="button" class="more" id="toutesPieces">toutes les pièces</button>' : ''}</p>`;
+  if (!groupes.length) html += `<div class="empty">${pieceChoisie ? 'Rien à faire dans cette pièce ce jour-là.' : 'Rien de prévu ce jour-là.'}</div>`;
+  html += groupes.map(([p, ts]) => `<div><h3>${esc(p.nom)} <span class="count">${ts.filter(t => faites.has(t.id)).length}/${ts.length}</span></h3><ul>${ts.map(t => {
+    const ok = faites.has(t.id);
+    return `<li class="${ok?'fait':''}"><button type="button" class="case" data-t="${esc(t.id)}" aria-pressed="${ok}" aria-label="${ok?'Décocher':'Cocher'} ${esc(t.titre)}">${ok?'✓':''}</button><span>${esc(t.titre)}</span></li>`;
+  }).join('')}</ul></div>`).join('');
+  $('#corvees').innerHTML = html;
+  $('#toutesPieces')?.addEventListener('click', () => { pieceChoisie = null; renderMenage(); });
+  $('#corvees').querySelectorAll('.case').forEach(b => b.onclick = async () => {
+    const fait = b.getAttribute('aria-pressed') !== 'true', jour = jourChoisi, id = b.dataset.t;
+    const avant = menage.fait[jour] || [];
+    menage.fait[jour] = fait ? [...new Set([...avant, id])] : avant.filter(x => x !== id);
+    renderMenage(); if (dernier) renderResume(dernier);
+    try {
+      const r = await fetch('api/menage/cocher', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({tache:id, date:jour, fait})});
+      if (r.status === 401) { location.reload(); return; }
+      if (!r.ok) throw 0;
+      menage.fait[jour] = (await r.json()).fait;
+    } catch { menage.fait[jour] = avant; renderMenage(); $('#corvees').insertAdjacentHTML('afterbegin', '<p class="err">Impossible d’enregistrer. Réessayez.</p>'); }
+  });
+}
+
+// ---------- Modifier le planning du ménage ----------
+const dlgMenage = $('#dlgMenage');
+function ouvrirEditeur(){
+  if (!menage) return;
+  let brouillon = menage.taches.map(t => ({...t, jours:[...t.jours]}));
+  const pieces = menage.plan.pieces;
+  const dessiner = () => {
+    $('#editeur').innerHTML = `<div class="head"><h2 id="h-edit">Planning du ménage</h2><button class="btn ghost small" type="button" id="edAjout">Ajouter une tâche</button></div>
+      <p class="hint">Choisissez la pièce, le nom de la tâche et les jours où elle revient.</p>
+      <div id="edListe">${brouillon.map((t, i) => `<div class="ligne-t" data-i="${i}">
+        <div class="champs"><select aria-label="Pièce">${pieces.map(p => `<option value="${p.id}"${p.id===t.piece?' selected':''}>${esc(p.nom)}</option>`).join('')}</select>
+        <input aria-label="Tâche" value="${esc(t.titre)}" placeholder="Ex. Aspirateur" maxlength="80"></div>
+        <button type="button" class="suppr" aria-label="Supprimer la tâche">×</button>
+        <div class="jours">${NOMS_JOURS.map((j, n) => `<button type="button" data-n="${n}" aria-pressed="${t.jours.includes(n)}" aria-label="${JOURS_LONGS[n]}">${j}</button>`).join('')}</div>
+      </div>`).join('')}</div>
+      <div class="head"><span class="hint" id="edMsg"></span><div class="row"><button class="btn ghost" type="button" id="edAnnuler">Annuler</button><button class="btn" type="button" id="edOk">Enregistrer</button></div></div>`;
+    const lire = () => $('#edListe').querySelectorAll('.ligne-t').forEach(l => {
+      const t = brouillon[+l.dataset.i]; t.piece = l.querySelector('select').value; t.titre = l.querySelector('input').value;
+    });
+    $('#edListe').querySelectorAll('.ligne-t').forEach(l => {
+      const t = brouillon[+l.dataset.i];
+      l.querySelectorAll('.jours button').forEach(b => b.onclick = () => {
+        const n = +b.dataset.n; t.jours = t.jours.includes(n) ? t.jours.filter(x => x !== n) : [...t.jours, n];
+        b.setAttribute('aria-pressed', String(t.jours.includes(n)));
+      });
+      l.querySelector('.suppr').onclick = () => { lire(); brouillon.splice(+l.dataset.i, 1); dessiner(); };
+    });
+    $('#edAjout').onclick = () => { lire(); brouillon.push({id:'', piece: pieceChoisie || pieces[0].id, titre:'', jours:[jourSemaine(jourChoisi || jourCle(new Date()))]}); dessiner(); $('#edListe').lastElementChild?.querySelector('input').focus(); };
+    $('#edAnnuler').onclick = () => dlgMenage.close();
+    $('#edOk').onclick = async () => {
+      lire();
+      const incompletes = brouillon.filter(t => !t.titre.trim() || !t.jours.length).length;
+      if (incompletes){ $('#edMsg').className = 'err'; $('#edMsg').textContent = `${incompletes} tâche${incompletes>1?'s':''} sans nom ou sans jour : complétez ou supprimez-les.`; return; }
+      $('#edMsg').className = 'hint dots'; $('#edMsg').textContent = 'Enregistrement';
+      try {
+        const r = await fetch('api/menage/taches', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({taches: brouillon})});
+        if (!r.ok) throw 0;
+        menage.taches = (await r.json()).taches;
+        dlgMenage.close(); renderMenage(); if (dernier) renderResume(dernier);
+      } catch { $('#edMsg').className = 'err'; $('#edMsg').textContent = 'Échec de l’enregistrement. Réessayez.'; }
+    };
+  };
+  dessiner();
+  dlgMenage.showModal();
+}
+$('#menageModifier').onclick = ouvrirEditeur;
+
 // ---------- Garde-manger ----------
 function renderGm(g){
   const box = $('#gm');
@@ -453,6 +626,7 @@ function renderResume(d){
   if (retard) morceaux.push(`<b>${retard} tâche${retard>1?'s':''} en retard</b>`);
   const finir = d.garde_manger?.a_finir || [];
   if (finir.length) morceaux.push(`${esc(finir.slice(0,3).join(', ').toLowerCase())} à finir`);
+  if (menage){ const auj = jourCle(new Date()), reste = tachesDu(auj).filter(t => !faitesDu(auj).has(t.id)).length; if (reste) morceaux.push(`${reste} tâche${reste>1?'s':''} de ménage`); }
   const [auj, dem] = d.meteo?.jours || [];
   if (auj?.pluie >= 60) morceaux.push(`pluie probable aujourd’hui (${Math.round(auj.pluie)} %)`);
   else if (dem?.pluie >= 60) morceaux.push(`pluie probable demain (${Math.round(dem.pluie)} %)`);
@@ -506,7 +680,7 @@ async function charger(){
     if (r.status === 401) { location.reload(); return; }
     if (!r.ok) throw new Error('HTTP ' + r.status);
     dernier = await r.json();
-    renderAgenda(dernier.agenda, dernier.rappels); renderTaches(dernier.rappels); renderGm(dernier.garde_manger); renderMeteo(dernier.meteo);
+    renderAgenda(dernier.agenda, dernier.rappels); renderTaches(dernier.rappels); renderGm(dernier.garde_manger); renderMeteo(dernier.meteo); renderMenage(dernier.menage);
     renderResume(dernier);
     $('#maj').textContent = 'Mis à jour à ' + heure(new Date());
   } catch {

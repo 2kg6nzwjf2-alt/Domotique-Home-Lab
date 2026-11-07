@@ -25,6 +25,7 @@ import donnees as donnees_gm  # noqa: E402  (garde-manger/donnees.py)
 from liens import soiree  # noqa: E402
 from plateforme import ListeIntrouvable  # noqa: E402
 from plateforme import _cle_liste as plateforme_cle_liste  # noqa: E402
+from menage import Menage  # noqa: E402
 from meteo import ErreurMeteo, Meteo  # noqa: E402
 from stockage import EtatTropGros, Stockage  # noqa: E402  (garde-manger/stockage.py)
 
@@ -44,6 +45,7 @@ class Appli:
     def __init__(self, dossier_donnees, rappels, agenda_appareil, coffre):
         self.rappels, self.agenda_appareil, self.coffre = rappels, agenda_appareil, coffre
         self.etat_gm = Stockage(os.path.join(dossier_donnees, "garde-manger", "etat.json"))
+        self.menage = Menage(os.path.join(dossier_donnees, "menage.json"))
         with open(os.path.join(ICI, "templates", "tableau.html"), encoding="utf-8") as f:
             self.page_maison = f.read()
         with open(os.path.join(DOSSIER_GM, "templates", "index.html"), encoding="utf-8") as f:
@@ -114,6 +116,7 @@ class Appli:
                 resultat["meteo"] = self._meteo.previsions()
             except ErreurMeteo as e:
                 resultat["meteo"] = {"erreur": str(e)}
+        resultat["menage"] = self.menage.lire()
         _, etat = self.etat_gm.lire()
         courses = etat.get("courses") if isinstance(etat.get("courses"), list) else []
         placard = etat.get("pantry") if isinstance(etat.get("pantry"), list) else []
@@ -245,6 +248,11 @@ class Gestionnaire(BaseHTTPRequestHandler):
         return self._envoyer(404, {"code": "introuvable"})
 
     def do_PUT(self):
+        if urlsplit(self.path).path == "/api/menage/taches":
+            try:
+                return self._envoyer(200, {"taches": self.appli.menage.enregistrer_taches(self._corps().get("taches"))})
+            except ValueError as e:
+                return self._envoyer(400, {"code": "bad_request", "message": str(e)})
         if urlsplit(self.path).path != "/garde-manger/api/etat":
             return self._envoyer(404, {"code": "introuvable"})
         try:
@@ -268,6 +276,11 @@ class Gestionnaire(BaseHTTPRequestHandler):
                 return self._envoyer(200, {"ok": bool(a.rappels.terminer(str(corps.get("id") or "")))})
             if chemin == "/api/reglages":
                 return self._envoyer(200, a.enregistrer_reglages(corps))
+            if chemin == "/api/menage/cocher":
+                try:
+                    return self._envoyer(200, {"fait": a.menage.cocher(str(corps.get("tache") or ""), corps.get("date"), bool(corps.get("fait", True)))})
+                except ValueError as e:
+                    return self._envoyer(400, {"code": "bad_request", "message": str(e)})
             if chemin == "/garde-manger/api/courses/rappels":
                 return self._envoyer(200, a.courses_vers_rappels(corps))
             if chemin.startswith("/garde-manger/api/claude/"):

@@ -257,3 +257,56 @@ def test_meteo_erreurs(appli):
     assert c.get("/api/tableau").get_json()["meteo"]["lieu"] == "Lyon"
     c = appli(meteo=Meteo("Xyzzy", session=FauxMeteoHTTP(geo={})))
     assert "introuvable" in c.get("/api/tableau").get_json()["meteo"]["erreur"]
+
+
+# ---------- Ménage ----------
+def test_menage_planning_et_cocher(tmp_path):
+    from menage import Menage, PLAN
+    m = Menage(str(tmp_path / "menage.json"))
+    d = m.lire()
+    assert {p["id"] for p in d["plan"]["pieces"]} == {"ayami", "parent", "wc", "couloir", "sdb", "entree", "cuisine"}
+    assert d["taches"] and all(t["piece"] in {p["id"] for p in PLAN["pieces"]} for t in d["taches"])
+    premiere = d["taches"][0]["id"]
+    assert m.cocher(premiere, "2026-11-07") == [premiere]
+    assert m.cocher(premiere, "2026-11-07", fait=False) == []
+    m.cocher(premiere, "2026-11-07")
+    assert m.lire()["fait"] == {"2026-11-07": [premiere]}
+    with pytest.raises(ValueError):
+        m.cocher("inconnue", "2026-11-07")
+    with pytest.raises(ValueError):
+        m.cocher(premiere, "7/11/2026")
+    # les vieilles tâches cochées sont oubliées
+    m.cocher(premiere, "2026-01-01")
+    assert "2026-01-01" in m.lire()["fait"] and "2026-11-07" in m.lire()["fait"]
+    m.cocher(premiere, "2026-11-08")
+    assert "2026-01-01" not in m.lire()["fait"]
+
+
+def test_menage_modifier_le_planning(tmp_path):
+    from menage import Menage
+    m = Menage(str(tmp_path / "menage.json"))
+    premiere = m.lire()["taches"][0]["id"]
+    m.cocher(premiere, "2026-11-07")
+    taches = m.enregistrer_taches([
+        {"id": premiere, "piece": "cuisine", "titre": " Vaisselle ", "jours": [6, 0, 0, "3", 9]},
+        {"piece": "sdb", "titre": "Miroir", "jours": [2]},
+        {"piece": "garage", "titre": "Pièce inconnue", "jours": [1]},
+        {"piece": "wc", "titre": "", "jours": [1]},
+        {"piece": "wc", "titre": "Sans jour", "jours": []},
+    ])
+    assert [(t["piece"], t["titre"], t["jours"]) for t in taches] == [("cuisine", "Vaisselle", [0, 3, 6]), ("sdb", "Miroir", [2])]
+    assert taches[0]["id"] == premiere and taches[1]["id"].startswith("t")
+    assert m.lire()["fait"]["2026-11-07"] == [premiere]
+    m.enregistrer_taches([{"piece": "sdb", "titre": "Miroir", "jours": [2]}])
+    assert m.lire()["fait"].get("2026-11-07", []) == []  # tâche supprimée : plus cochée
+
+
+def test_menage_dans_le_tableau(appli):
+    c = appli()
+    d = c.get("/api/tableau").get_json()["menage"]
+    t = d["taches"][0]["id"]
+    assert c.post("/api/menage/cocher", json={"tache": t, "date": "2026-11-07"}).get_json() == {"fait": [t]}
+    assert c.post("/api/menage/cocher", json={"tache": t}).status_code == 400
+    r = c.put("/api/menage/taches", json={"taches": [{"piece": "wc", "titre": "Toilettes", "jours": [5]}]})
+    assert r.status_code == 200 and c.get("/api/tableau").get_json()["menage"]["taches"][0]["titre"] == "Toilettes"
+    assert c.put("/api/menage/taches", json={"taches": "non"}).status_code == 400

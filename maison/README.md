@@ -5,6 +5,7 @@ Tableau de bord de la maison, pensé pour l'iPhone et l'iPad :
 - **Météo** : aujourd'hui et demain, par [Open-Meteo](https://open-meteo.com) (gratuit, sans clé) ;
 - **Aujourd'hui** : les rendez-vous du jour de Google Agenda ;
 - **Tâches** : vos Rappels Apple (tâches, courses…), envoyés par un Raccourci de l'iPhone ;
+- **Ménage** : le plan de l'appartement, avec les pièces à nettoyer surlignées et les tâches du jour à cocher ; le planning se modifie dans l'appli ;
 - **Garde-manger** : la sous-appli de recettes et de courses, à l'adresse `/garde-manger/`.
 
 Le serveur est en Python (Flask). Une seule connexion par mot de passe protège tout, Garde-manger compris.

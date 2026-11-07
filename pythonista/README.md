@@ -7,6 +7,7 @@ L'appli Maison (tableau de bord et Garde-manger) tourne directement sur l'iPhone
 | Tâches (Rappels Apple) | lues directement ; touchez le rond pour cocher une tâche |
 | Météo | aujourd'hui et demain pour votre ville (Open-Meteo, gratuit, sans compte) |
 | Agenda du jour | calendrier de l'iPhone (ajoutez-y votre compte Google), ou adresse iCal de Google |
+| Ménage | plan de l'appartement, pièces à nettoyer surlignées, tâches du jour à cocher, planning modifiable ; partagé par iCloud |
 | Garde-manger | hors connexion ; placard et courses partagés par iCloud entre l'iPhone et l'iPad |
 | Courses | les ingrédients manquants d'une recette sont ajoutés à votre liste Rappels « Courses » |
 | Ce soir | Garde-manger propose une recette rapide si la soirée est chargée, et rien si vous dînez dehors |

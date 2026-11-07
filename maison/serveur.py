@@ -27,6 +27,7 @@ from stockage import Stockage  # noqa: E402  (garde-manger/stockage.py)
 from agenda import Agenda  # noqa: E402
 from liens import soiree  # noqa: E402
 from rappels import Rappels, analyser_json, analyser_texte  # noqa: E402
+from menage import Menage  # noqa: E402
 from meteo import ErreurMeteo, Meteo  # noqa: E402
 
 MARQUEUR = "/*__MAISON__*/null"
@@ -87,6 +88,7 @@ def create_app(dossier_donnees=None, mot_de_passe=None, cle_raccourci=None, agen
         MAX_CONTENT_LENGTH=2 * 1024 * 1024,
     )
     rappels = Rappels(os.path.join(dossier_donnees, "rappels.json"))
+    menage = Menage(os.path.join(dossier_donnees, "menage.json"))
     dossier_gm = os.path.join(dossier_donnees, "garde-manger")
     etat_gm = Stockage(os.path.join(dossier_gm, "etat.json"))
     with open(os.path.join(DOSSIER, "templates", "tableau.html"), encoding="utf-8") as f:
@@ -165,6 +167,7 @@ def create_app(dossier_donnees=None, mot_de_passe=None, cle_raccourci=None, agen
             except Exception:  # un agenda abîmé ne doit pas casser tout le tableau
                 app.logger.exception("agenda")
                 resultat["agenda"] = {"evenements": [], "erreurs": ["Agenda illisible"]}
+        resultat["menage"] = menage.lire()
         _, etat = etat_gm.lire()
         courses = etat.get("courses") if isinstance(etat.get("courses"), list) else []
         placard = etat.get("pantry") if isinstance(etat.get("pantry"), list) else []
@@ -174,6 +177,22 @@ def create_app(dossier_donnees=None, mot_de_passe=None, cle_raccourci=None, agen
             "placard": len(placard),
         }
         return jsonify(resultat)
+
+    @app.post("/api/menage/cocher")
+    def menage_cocher():
+        corps = request.get_json(silent=True) or {}
+        try:
+            return jsonify(fait=menage.cocher(str(corps.get("tache") or ""), corps.get("date"), bool(corps.get("fait", True))))
+        except ValueError as e:
+            return jsonify(code="bad_request", message=str(e)), 400
+
+    @app.put("/api/menage/taches")
+    def menage_taches():
+        corps = request.get_json(silent=True) or {}
+        try:
+            return jsonify(taches=menage.enregistrer_taches(corps.get("taches")))
+        except ValueError as e:
+            return jsonify(code="bad_request", message=str(e)), 400
 
     @app.post("/api/rappels")
     def recevoir_rappels():

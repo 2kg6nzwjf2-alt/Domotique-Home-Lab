@@ -233,3 +233,13 @@ def test_rappels_ios_avec_faux_module(monkeypatch):
     with pytest.raises(plateforme.ListeIntrouvable):
         r.ajouter("買い物のリスタート", "Pain")
     assert len(faux.listes) == 3  # aucune liste créée
+
+
+def test_menage_version_pythonista(appli):
+    _, c, _, _ = appli
+    d = c.json("GET", "/api/tableau")[1]["menage"]
+    t = d["taches"][0]["id"]
+    assert c.json("POST", "/api/menage/cocher", {"tache": t, "date": "2026-11-07"}) == (200, {"fait": [t]})
+    assert c.json("POST", "/api/menage/cocher", {"tache": t, "date": "hier"})[0] == 400
+    statut, r = c.json("PUT", "/api/menage/taches", {"taches": [{"piece": "cuisine", "titre": "Poubelles", "jours": [1, 4]}]})
+    assert statut == 200 and r["taches"][0]["jours"] == [1, 4]

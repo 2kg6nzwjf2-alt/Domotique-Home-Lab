@@ -71,7 +71,7 @@ button.dot:hover{border-color:var(--ok);background:var(--ok-soft)}
 .credit a{color:inherit}
 
 /* ménage */
-#carteMenage{grid-column:1 / -1}
+#carteMenage{grid-column:1 / -1;container-type:inline-size}
 .semaine{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
 .semaine button{border:0;border-radius:10px;padding:6px 0 7px;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;align-items:center;gap:1px;font-size:12px;font-weight:600;position:relative}
 .semaine button b{font-family:var(--f-mono);font-size:15px;font-weight:500}
@@ -81,7 +81,7 @@ button.dot:hover{border-color:var(--ok);background:var(--ok-soft)}
 .semaine button i.retard{background:var(--bad)}
 .semaine button i.ok{background:var(--ok)}
 .menage-corps{display:grid;gap:14px;grid-template-columns:minmax(0,1fr)}
-@media (min-width:700px){.menage-corps{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);align-items:start}}
+@container (min-width: 620px){.menage-corps{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);align-items:start}}
 .plan svg{width:100%;height:auto;max-height:440px;display:block}
 .plan .piece rect{fill:var(--surface);stroke:var(--ink);stroke-width:7;cursor:pointer;transition:fill .2s}
 .plan .piece.a-faire rect{fill:var(--warn-soft)}
@@ -141,13 +141,24 @@ dialog#dlgMenage::backdrop{background:rgba(10,16,30,.5)}
 .events li.encours .h{color:var(--accent);font-weight:600}
 
 /* frise de la journée (mode paysage) */
-/* portrait : une seule grille, météo en premier. Paysage : l'agenda en colonne à gauche, les autres cartes à droite */
-.autres{display:contents}
+/* Portrait : une seule grille (météo, agenda, tâches, ménage, garde-manger).
+   Paysage : agenda à gauche ; à droite, colonne météo + tâches + garde-manger, puis ménage
+   (à côté sur iPad, en dessous sur un écran plus étroit). Chaque colonne a sa propre hauteur : pas de trous. */
+.autres,.colonne{display:contents}
 #carteMeteo{order:-1}
+#carteGm{order:1}
 @media (orientation: landscape) and (min-width: 700px){
   main.grid{grid-template-columns:minmax(0,1fr) minmax(0,2fr)}
-  .autres{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px;align-items:start}
-  #carteMeteo{order:0}
+  .autres{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px;align-items:start}
+  .colonne{display:flex;flex-direction:column;gap:16px;min-width:0}
+  #carteMeteo,#carteGm{order:0}
+  #carteMenage{grid-column:auto}
+}
+@media (orientation: portrait) and (min-width: 700px){
+  main.grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .colonne{display:flex;flex-direction:column;gap:16px;min-width:0;grid-column:1;grid-row:1}
+  #carteAgenda{grid-column:2;grid-row:1}
+  #carteMenage{grid-column:1 / -1;grid-row:2}
 }
 .frise-scroll{max-height:min(72vh,760px);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;border-top:1px solid var(--line);margin-inline:-4px;padding-inline:4px}
 .frise{position:relative;margin-block:10px}
@@ -222,6 +233,7 @@ ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;m
     </section>
 
     <div class="autres">
+    <div class="colonne">
     <section class="card" id="carteMeteo" aria-labelledby="h-meteo">
       <div class="head"><h2 id="h-meteo">Météo</h2><span class="hint" id="meteoLieu"></span></div>
       <div id="meteo"><p class="hint dots">Chargement</p></div>
@@ -236,6 +248,15 @@ ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;m
       <div id="taches"><p class="hint dots">Chargement</p></div>
     </section>
 
+    <section class="card" id="carteGm" aria-labelledby="h-gm">
+      <a class="app" href="garde-manger/">
+        <img src="garde-manger/static/apple-touch-icon.png" alt="">
+        <div><b id="h-gm">Garde-manger</b><span>Recettes avec ce que vous avez, pas à pas et courses</span></div>
+      </a>
+      <div id="gm"></div>
+    </section>
+    </div>
+
     <section class="card" id="carteMenage" aria-labelledby="h-menage">
       <div class="head"><h2 id="h-menage">Ménage</h2><button class="btn ghost small" type="button" id="menageModifier">Modifier le planning</button></div>
       <div class="semaine" id="semaine" role="group" aria-label="Jour de la semaine"></div>
@@ -243,14 +264,6 @@ ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;m
         <div class="plan" id="plan"></div>
         <div class="corvees" id="corvees"><p class="hint dots">Chargement</p></div>
       </div>
-    </section>
-
-    <section class="card" aria-labelledby="h-gm">
-      <a class="app" href="garde-manger/">
-        <img src="garde-manger/static/apple-touch-icon.png" alt="">
-        <div><b id="h-gm">Garde-manger</b><span>Recettes avec ce que vous avez, pas à pas et courses</span></div>
-      </a>
-      <div id="gm"></div>
     </section>
     </div>
   </main>

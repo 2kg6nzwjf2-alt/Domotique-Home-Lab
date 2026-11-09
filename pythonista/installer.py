@@ -2,96 +2,31 @@
 
 1. Copiez tout ce fichier.
 2. Dans Pythonista : touchez « + », choisissez « Empty Script », nommez-le « installer », collez, puis touchez ▶.
-3. Relancez-le quand vous voulez la dernière version : vos données sont conservées.
+3. Pour avoir la dernière version plus tard, lancez « Mettre à jour.py » dans le dossier Maison : vos données sont conservées.
 
-Le programme est copié dans le dossier « Maison » d'iCloud (s'il est activé dans Pythonista),
-pour que l'iPhone et l'iPad partagent le même placard et la même liste de courses.
+Ce fichier ne change jamais : il télécharge le programme depuis GitHub et lance son installation (installation.py).
 """
 
 import io
-import json
-import os
-import shutil
 import ssl
-import sys
-import tempfile
 import urllib.request
 import zipfile
 
 DEPOT = "2kg6nzwjf2-alt/Domotique-Home-Lab"
 BRANCHE = "main"
-DOSSIERS = ("garde-manger", "maison")
-# Bibliothèques en Python pur, pour lire l'adresse iCal de Google (versions compatibles avec Python 3.10)
-PAQUETS = [
-    ("icalendar", "6.3.2"),
-    ("recurring-ical-events", "3.8.2"),
-    ("x-wr-timezone", "2.0.1"),
-    ("python-dateutil", "2.9.0.post0"),
-    ("six", "1.17.0"),
-    ("tzdata", "2026.6"),
-    ("click", "8.5.0"),
-]
 
 
-def telecharger(url):
-    requete = urllib.request.Request(url, headers={"User-Agent": "Maison-installer"})
-    with urllib.request.urlopen(requete, timeout=60, context=ssl.create_default_context()) as r:
-        return r.read()
-
-
-def dossier_cible():
-    documents = os.path.expanduser("~/Documents")
-    icloud = os.path.expanduser("~/Library/Mobile Documents/iCloud~com~omz-software~Pythonista3/Documents")
-    base = icloud if os.path.isdir(icloud) else documents
-    return os.path.join(os.environ.get("MAISON_INSTALLER_BASE", base), "Maison"), base == icloud
-
-
-def installer_programme(cible):
+def installer():
     print("Téléchargement du programme depuis GitHub…")
-    archive = zipfile.ZipFile(io.BytesIO(telecharger(f"https://github.com/{DEPOT}/archive/refs/heads/{BRANCHE}.zip")))
-    racine = archive.namelist()[0].split("/")[0]
-    os.makedirs(cible, exist_ok=True)
-    with tempfile.TemporaryDirectory() as temporaire:
-        archive.extractall(temporaire)
-        source = os.path.join(temporaire, racine)
-        for dossier in DOSSIERS:
-            destination = os.path.join(cible, dossier)
-            if os.path.isdir(destination):
-                shutil.rmtree(destination)
-            shutil.copytree(os.path.join(source, dossier), destination,
-                            ignore=shutil.ignore_patterns("tests", "__pycache__", "donnees_utilisateur"))
-        for fichier, nom in (("lancer.py", "Maison.py"), ("installer.py", "Mettre à jour.py")):
-            shutil.copy(os.path.join(source, "pythonista", fichier), os.path.join(cible, nom))
-    os.makedirs(os.path.join(cible, "donnees"), exist_ok=True)
-
-
-def installer_bibliotheques():
-    site = os.environ.get("MAISON_INSTALLER_SITE") or os.path.expanduser("~/Documents/site-packages-3")
-    os.makedirs(site, exist_ok=True)
-    for nom, version in PAQUETS:
-        print(f"Bibliothèque {nom} {version}…")
-        infos = json.loads(telecharger(f"https://pypi.org/pypi/{nom}/{version}/json"))
-        roue = next(u for u in infos["urls"] if u["packagetype"] == "bdist_wheel" and u["filename"].endswith("-none-any.whl"))
-        with zipfile.ZipFile(io.BytesIO(telecharger(roue["url"]))) as z:
-            fichiers = [e for e in z.namelist() if not e.split("/")[0].endswith(".dist-info")]
-            for haut in {e.split("/")[0] for e in fichiers if "/" in e}:  # ancienne version remplacée
-                shutil.rmtree(os.path.join(site, haut), ignore_errors=True)
-            z.extractall(site, fichiers)
-    if site not in sys.path:
-        sys.path.insert(0, site)
-
-
-def main():
-    cible, icloud = dossier_cible()
-    installer_programme(cible)
-    installer_bibliotheques()
-    print()
-    print("C'est installé dans :", cible)
-    if not icloud:
-        print("Attention : iCloud n'est pas activé dans Pythonista, l'iPad n'aura pas les mêmes données.")
-    print("Pour ouvrir l'appli : dossier « Maison », fichier « Maison.py », puis ▶.")
-    print("Sur l'autre appareil, lancez une fois « Mettre à jour.py » depuis le dossier Maison.")
+    requete = urllib.request.Request(f"https://github.com/{DEPOT}/archive/refs/heads/{BRANCHE}.zip",
+                                     headers={"User-Agent": "Maison-installer"})
+    with urllib.request.urlopen(requete, timeout=60, context=ssl.create_default_context()) as r:
+        archive = r.read()
+    with zipfile.ZipFile(io.BytesIO(archive)) as z:
+        racine = z.namelist()[0].split("/")[0]
+        code = z.read(f"{racine}/pythonista/installation.py").decode("utf-8")
+    exec(compile(code, "installation.py", "exec"), {"__name__": "__main__", "ARCHIVE": archive})
 
 
 if __name__ == "__main__":
-    main()
+    installer()

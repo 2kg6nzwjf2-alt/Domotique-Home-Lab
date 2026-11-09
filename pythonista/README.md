@@ -25,6 +25,8 @@ Sur l'iPad : le dossier Maison arrive par iCloud. Lancez une fois **Mettre à jo
 
 Pour avoir la dernière version plus tard, lancez **Mettre à jour.py** : vos données sont conservées.
 
+**Maison.py** et **Mettre à jour.py** ne changent jamais : ils lancent le programme rangé dans les dossiers `maison` et `garde-manger`, que les mises à jour remplacent. Vous pouvez donc les laisser ouverts dans l'éditeur pendant une mise à jour.
+
 ## Réglages
 
 En bas du tableau de bord, la section **Réglages** permet de choisir :

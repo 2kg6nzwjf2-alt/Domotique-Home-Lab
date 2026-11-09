@@ -110,7 +110,8 @@ def main(contenu=None):
     print()
     print("C'est installé dans :", cible)
     if not icloud:
-        print("Attention : iCloud n'est pas activé dans Pythonista, l'iPad n'aura pas les mêmes données.")
+        print("Attention : iCloud Drive n'est pas activé pour Pythonista, l'iPad n'aura pas les mêmes données.")
+        print("Réglages de l'appareil > votre nom > iCloud > iCloud Drive : activez Pythonista, puis relancez ce programme.")
     print("Pour ouvrir l'appli : dossier « Maison », fichier « Maison.py », puis ▶.")
     print("Sur l'autre appareil, lancez une fois « Mettre à jour.py » depuis le dossier Maison.")
     if reecrits:

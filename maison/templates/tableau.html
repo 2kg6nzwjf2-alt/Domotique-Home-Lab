@@ -667,7 +667,7 @@ if (APPAREIL){
   // synchronisation iPhone / iPad
   const S = M.synchro || {};
   reg.querySelector('div').insertAdjacentHTML('beforeend', S.partage === 'appareil'
-    ? `<p class="hint"><span class="err">Synchronisation : le dossier Maison n’est pas dans iCloud, le placard et le ménage restent sur cet appareil.</span> Activez iCloud dans les réglages de Pythonista (roue dentée), puis relancez l’installation depuis le dossier Maison d’iCloud.</p>`
+    ? `<p class="hint"><span class="err">Synchronisation : le dossier Maison n’est pas dans iCloud, le placard et le ménage restent sur cet appareil.</span> Dans l’app Réglages de l’appareil : votre nom > iCloud > iCloud Drive, activez Pythonista. Puis relancez l’installation depuis le dossier Maison de la section iCloud de Pythonista.</p>`
     : `<p class="hint" id="r_synchro">Synchronisation : données partagées par iCloud${S.appareil ? ' (cet appareil : ' + esc(S.appareil) + ')' : ''}.</p>`);
   reg.querySelector('div').insertAdjacentHTML('beforeend', '<p class="hint" id="r_listes">Lecture des listes Rappels…</p>');
   fetch('api/rappels/listes').then(r => r.ok ? r.json() : Promise.reject(r.status)).then(d => {

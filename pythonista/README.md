@@ -15,7 +15,7 @@ L'appli Maison (tableau de bord et Garde-manger) tourne directement sur l'iPhone
 
 ## Installation (une seule fois)
 
-1. Dans Pythonista, ouvrez les réglages (roue dentée) et activez **iCloud**.
+1. Dans l'app **Réglages** de l'iPhone : touchez votre nom > **iCloud** > **iCloud Drive**, et vérifiez que **Pythonista** est activé dans la liste des apps qui utilisent iCloud Drive (selon la version d'iOS, la liste est sous « Apps synchronisées avec iCloud Drive » ou « Tout afficher »). Dans Pythonista, une section **iCloud** apparaît alors dans la liste des fichiers.
 2. Ouvrez [installer.py sur GitHub](https://github.com/2kg6nzwjf2-alt/Domotique-Home-Lab/blob/main/pythonista/installer.py), touchez **Raw**, puis copiez tout le texte.
 3. Dans Pythonista, touchez **+**, puis **Empty Script**, nommez-le `installer`, collez le texte et touchez **▶**.
 4. Quand le message « C'est installé » apparaît, ouvrez le dossier **Maison** (dans iCloud), puis **Maison.py**, et touchez **▶**.
@@ -36,7 +36,7 @@ Le placard, les courses, les codes-barres mémorisés et le ménage sont dans le
 - En bas du tableau de bord, **Réglages** indique si les données sont bien dans iCloud, et sur quel appareil et à quelle heure le placard et le ménage ont été modifiés en dernier : les deux appareils doivent afficher les mêmes heures. Le bouton **Synchroniser maintenant** redemande les fichiers à iCloud.
 - Si le planning du ménage a été changé sur l'autre appareil pendant que vous le modifiiez, il est rechargé au lieu d'être écrasé.
 
-Si un appareil n'a pas les mêmes données : vérifiez que **iCloud** est activé dans les réglages de Pythonista (roue dentée) et que le dossier **Maison** est rangé sous **iCloud**, pas sous « This iPhone » ou « This iPad ». Sinon, activez iCloud, supprimez ce dossier Maison local, puis lancez **Mettre à jour.py** depuis le dossier Maison d'iCloud.
+Si un appareil n'a pas les mêmes données : vérifiez sur cet appareil que **Pythonista** est activé dans Réglages > votre nom > iCloud > iCloud Drive, et que le dossier **Maison** est rangé sous **iCloud** dans la liste des fichiers de Pythonista, pas sous « This iPhone » ou « This iPad ». Sinon, activez Pythonista pour iCloud Drive, supprimez ce dossier Maison local, puis lancez **Mettre à jour.py** depuis le dossier Maison d'iCloud.
 
 ## Réglages
 

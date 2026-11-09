@@ -248,6 +248,46 @@ dialog.fenetre .te-piece select{font:inherit;font-size:16px;color:var(--ink);bor
   #carteAgenda{grid-column:2;grid-row:1}
   #carteMenage{grid-column:1 / -1;grid-row:2}
 }
+/* Mode cadre sur iPad : tout tient dans l'écran, sans faire défiler la page.
+   Chaque carte prend la hauteur disponible ; ce qui dépasse défile dans la carte. */
+@media (min-width: 700px){
+  body.cadre{height:100vh;height:100dvh;overflow:hidden;padding-block:8px 10px}
+  body.cadre .wrap{height:100%;max-width:none;gap:10px}
+  body.cadre.avec-fermer .wrap{padding-top:0}
+  body.cadre .fermer-appli{top:calc(max(env(safe-area-inset-top,0px),var(--marge-ios,0px)) + 4px);width:30px;height:30px;font-size:18px}
+  body.cadre .top{padding-left:40px;flex-wrap:nowrap}
+  body.cadre .top .resume{margin-top:2px;font-size:14px}
+  body.cadre main.grid{flex:1 1 auto;min-height:0;align-items:stretch;gap:12px}
+  body.cadre .card{min-height:0;overflow:hidden;padding:12px 14px;gap:8px}
+  body.cadre .colonne{min-height:0}
+  body.cadre .colonne > .card:not(#carteMeteo){flex:1 1 0;overflow-y:auto;overscroll-behavior:contain}
+  body.cadre #carteMeteo{flex:none}
+  body.cadre #carteMeteo .credit{display:none}
+  body.cadre #carteGm .app span{display:none}
+  body.cadre #carteAgenda{display:flex;flex-direction:column}
+  body.cadre #agenda{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain}
+  body.cadre #agenda .frise-scroll{flex:1 1 auto;min-height:0;max-height:none}
+  body.cadre #carteMenage{display:flex;flex-direction:column}
+  body.cadre .menage-corps{flex:1 1 auto;min-height:0}
+  body.cadre .plan .legende{display:none}
+  body.cadre .corvees{min-height:0;overflow-y:auto;overscroll-behavior:contain}
+}
+@media (orientation: landscape) and (min-width: 700px){
+  body.cadre main.grid{grid-template-rows:minmax(0,1fr)}
+  body.cadre .autres{grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);align-items:stretch;min-height:0}
+  /* ménage : plan en haut (hauteur limitée), tâches du jour en dessous */
+  body.cadre .menage-corps{display:flex;flex-direction:column;gap:8px}
+  body.cadre .plan{flex:none}
+  body.cadre .plan svg{max-height:34vh;margin:0 auto}
+  body.cadre .corvees{flex:1 1 0}
+}
+@media (orientation: portrait) and (min-width: 700px){
+  body.cadre main.grid{grid-template-rows:minmax(0,1.15fr) minmax(0,1fr)}
+  /* ménage en bas sur toute la largeur : plan à gauche, tâches du jour à droite */
+  body.cadre .menage-corps{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-rows:minmax(0,1fr);align-items:stretch}
+  body.cadre .plan{min-height:0;height:100%}
+  body.cadre .plan svg{height:100%;width:auto;max-height:none;max-width:42vw}
+}
 .frise-scroll{max-height:min(72vh,760px);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;border-top:1px solid var(--line);margin-inline:-4px;padding-inline:4px}
 .frise{position:relative;margin-block:10px}
 .frise .heure{position:absolute;left:0;right:0;border-top:1px solid var(--line)}

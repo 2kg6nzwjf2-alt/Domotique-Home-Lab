@@ -108,6 +108,32 @@ def copier_si_change(source, destination):
     return True
 
 
+IGNORES = {"tests", "__pycache__", "donnees_utilisateur"}
+
+
+def synchroniser_dossier(source, destination):
+    """Met `destination` à l'image de `source` fichier par fichier.
+
+    On ne supprime pas le dossier entier pour le recréer : dans iCloud, cela peut faire
+    disparaître des fichiers sur l'autre appareil, ou les laisser pas téléchargés.
+    Seuls les fichiers modifiés sont réécrits ; ceux qui ne font plus partie du programme sont supprimés.
+    """
+    attendus = set()
+    for racine, sous_dossiers, fichiers in os.walk(source):
+        sous_dossiers[:] = [d for d in sous_dossiers if d not in IGNORES]
+        cible = os.path.normpath(os.path.join(destination, os.path.relpath(racine, source)))
+        os.makedirs(cible, exist_ok=True)
+        for nom in fichiers:
+            attendus.add(os.path.join(cible, nom))
+            copier_si_change(os.path.join(racine, nom), os.path.join(cible, nom))
+    for racine, sous_dossiers, fichiers in os.walk(destination):
+        sous_dossiers[:] = [d for d in sous_dossiers if d not in IGNORES]
+        for nom in fichiers:
+            chemin = os.path.normpath(os.path.join(racine, nom))
+            if chemin not in attendus and not nom.startswith("."):  # « .x.icloud » : géré par iOS
+                os.remove(chemin)
+
+
 def installer_programme(cible, contenu=None):
     """Renvoie la liste des fichiers de lancement réécrits."""
     if contenu is None:
@@ -120,11 +146,7 @@ def installer_programme(cible, contenu=None):
         archive.extractall(temporaire)
         source = os.path.join(temporaire, racine)
         for dossier in DOSSIERS:
-            destination = os.path.join(cible, dossier)
-            if os.path.isdir(destination):
-                shutil.rmtree(destination)
-            shutil.copytree(os.path.join(source, dossier), destination,
-                            ignore=shutil.ignore_patterns("tests", "__pycache__", "donnees_utilisateur"))
+            synchroniser_dossier(os.path.join(source, dossier), os.path.join(cible, dossier))
         reecrits = [nom for fichier, nom in (("lancer.py", "Maison.py"), ("installer.py", "Mettre à jour.py"))
                     if copier_si_change(os.path.join(source, "pythonista", fichier), os.path.join(cible, nom))]
     os.makedirs(os.path.join(cible, "donnees"), exist_ok=True)

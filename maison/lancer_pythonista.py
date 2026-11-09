@@ -7,6 +7,7 @@ Sur un ordinateur, `python pythonista/lancer.py` lance une version de démonstra
 import os
 import sys
 import threading
+import time
 
 # Dossier « Maison » sur l'iPhone (racine du dépôt sur un ordinateur)
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -19,6 +20,53 @@ try:
     import ui  # présent seulement dans Pythonista
 except ImportError:
     ui = None
+
+
+
+def fichiers_pas_telecharges(dossiers):
+    """Fichiers du programme qu'iCloud n'a pas encore descendus sur l'appareil (« .nom.icloud »)."""
+    manquants = []
+    for dossier in dossiers:
+        for racine, sous_dossiers, fichiers in os.walk(dossier):
+            sous_dossiers[:] = [d for d in sous_dossiers if d != "__pycache__"]
+            manquants += [os.path.join(racine, f[1:-len(".icloud")]) for f in fichiers
+                          if f.startswith(".") and f.endswith(".icloud") and len(f) > 8]
+    return [c for c in manquants if not os.path.exists(c)]
+
+
+def telecharger_programme(attente=45):
+    """Demande à iOS les fichiers du programme restés dans iCloud et attend qu'ils arrivent.
+
+    Fait avant tout import du programme : ces fichiers peuvent eux-mêmes manquer.
+    Renvoie la liste des fichiers toujours absents.
+    """
+    dossiers = [os.path.join(RACINE, d) for d in ("maison", "garde-manger")]
+    manquants = fichiers_pas_telecharges(dossiers)
+    if not manquants or ui is None:
+        return manquants
+    print(f"Téléchargement de {len(manquants)} fichier(s) du programme depuis iCloud…")
+    try:
+        from objc_util import ObjCClass
+        gestionnaire, URL = ObjCClass("NSFileManager").defaultManager(), ObjCClass("NSURL")
+        for chemin in manquants:
+            gestionnaire.startDownloadingUbiquitousItemAtURL_error_(URL.fileURLWithPath_(chemin), None)
+    except Exception as e:
+        print("Demande à iCloud impossible :", e)
+    fin = time.time() + attente
+    while manquants and time.time() < fin:
+        time.sleep(0.5)
+        manquants = [c for c in manquants if not os.path.exists(c)]
+    return manquants
+
+
+MANQUANTS = telecharger_programme()
+if MANQUANTS:
+    print("Ces fichiers ne sont pas encore arrivés d'iCloud :")
+    for chemin in MANQUANTS[:8]:
+        print(" -", os.path.relpath(chemin, RACINE))
+    print("Vérifiez la connexion Internet, attendez un peu et relancez Maison.py.")
+    print("Si ça continue, lancez « Mettre à jour.py » : il réinstalle le programme.")
+    raise SystemExit(1)
 
 import appli_locale  # noqa: E402
 import plateforme  # noqa: E402

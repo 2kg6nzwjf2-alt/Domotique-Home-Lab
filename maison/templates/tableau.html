@@ -794,6 +794,30 @@ document.addEventListener('focusin', e => {
     setTimeout(() => e.target.scrollIntoView({block:'nearest'}), 350);
 });
 
+// ---------- Fenêtre ouverte : la page derrière est figée et inactive ----------
+// Sur iPhone, une fenêtre <dialog> n'empêche pas de faire défiler la page derrière (en glissant sur le fond
+// grisé), ce qui décale la fenêtre. Tant qu'une fenêtre est ouverte : page figée à sa position, reste de la
+// page inactif (inert), et un glissement hors des zones qui défilent ne fait rien.
+let pageFigee = null;
+function figerPage(){
+  const ouverte = !!document.querySelector('dialog[open]');
+  const page = $('.wrap'), corps = document.body.style;
+  if (ouverte && !pageFigee){
+    pageFigee = {y: window.scrollY};
+    Object.assign(corps, {position:'fixed', top: -pageFigee.y + 'px', left:'0', right:'0', width:'100%'});
+    page.inert = true; page.setAttribute('aria-hidden', 'true');
+  } else if (!ouverte && pageFigee){
+    Object.assign(corps, {position:'', top:'', left:'', right:'', width:''});
+    page.inert = false; page.removeAttribute('aria-hidden');
+    window.scrollTo(0, pageFigee.y); pageFigee = null;
+  }
+}
+const surveillance = new MutationObserver(figerPage);
+document.querySelectorAll('dialog').forEach(d => {
+  surveillance.observe(d, {attributes:true, attributeFilter:['open']});
+  d.addEventListener('touchmove', e => { if (!e.target.closest('.f-corps, .heures')) e.preventDefault(); }, {passive:false});
+});
+
 // ---------- Météo et agenda des 7 prochains jours ----------
 const dlgSemaine = $('#dlgSemaine');
 const semaines = {};

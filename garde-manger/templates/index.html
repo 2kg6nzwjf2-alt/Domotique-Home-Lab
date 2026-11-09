@@ -966,6 +966,24 @@ function customSheet(rec, people, trustDispo){
 
 // ---------- Mode pas à pas ----------
 const cookDlg = $('#cook');
+// Fenêtre ouverte : la page derrière est figée à sa position et inactive (sur iPhone, une fenêtre
+// n'empêche pas de faire défiler la page derrière, ce qui la décale).
+let pageFigee = null;
+function figerPage(){
+  const ouverte = !!document.querySelector('dialog[open]');
+  const page = $('.wrap'), corps = document.body.style;
+  if (ouverte && !pageFigee){
+    pageFigee = {y: window.scrollY};
+    Object.assign(corps, {position:'fixed', top: -pageFigee.y + 'px', left:'0', right:'0', width:'100%'});
+    page.inert = true;
+  } else if (!ouverte && pageFigee){
+    Object.assign(corps, {position:'', top:'', left:'', right:'', width:''});
+    page.inert = false;
+    window.scrollTo(0, pageFigee.y); pageFigee = null;
+  }
+}
+const surveillanceFenetres = new MutationObserver(figerPage);
+document.querySelectorAll('dialog').forEach(d => surveillanceFenetres.observe(d, {attributes:true, attributeFilter:['open']}));
 let C = null, timers = [], tick = null, actx = null, wake = null, tid = 0;
 function durations(text){
   const out = [], re = /(\d+)\s*h(?:eures?)?\s*(\d{1,2})(?:\s*min(?:ute)?s?)?(?![\da-zà-ÿ])|(\d+)\s*(?:à|-)\s*(\d+)\s*(min(?:ute)?s?|h(?:eures?)?)(?![a-zà-ÿ])|(\d+)\s*(min(?:ute)?s?|h(?:eures?)?)(?![a-zà-ÿ])/gi;

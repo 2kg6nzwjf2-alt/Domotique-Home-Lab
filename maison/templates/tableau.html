@@ -58,15 +58,16 @@ a{color:var(--accent)}
 body.avec-fermer .wrap{padding-top:36px}
 body.cadre .fermer-appli{opacity:.45}
 /* Mode cadre : l'iPad posé dans la maison, écran toujours allumé, grand texte, sombre la nuit */
-body.cadre{font-size:17px}
-body.cadre .top h1{font-size:clamp(24px,3vw,30px)}
-body.cadre .top .date{font-size:clamp(20px,2.6vw,28px);color:var(--ink);font-weight:600}
-body.cadre .clock{font-size:clamp(64px,10vw,120px)}
-body.cadre .card h2{font-size:23px}
-body.cadre .events .t,body.cadre .tasks li{font-size:17px}
-body.cadre .events .h{font-size:15px}
-body.cadre .jour .temp{font-size:34px}
-body.cadre .jour .lib{font-size:16px}
+body.cadre{font-size:16px;padding-block:12px 24px}
+body.cadre .top{align-items:center}
+body.cadre .top h1{font-size:22px}
+body.cadre .top .date{font-size:19px;color:var(--ink);font-weight:600;margin-top:4px}
+body.cadre .clock{font-size:clamp(40px,5.5vw,60px)}
+body.cadre .maj{margin-top:2px}
+body.cadre #cadreBtn{margin-top:4px}
+body.cadre .card h2{font-size:20px}
+body.cadre .events .t,body.cadre .tasks li{font-size:16px}
+body.cadre .jour .temp{font-size:28px}
 body.cadre .card:has(#reglages){display:none}
 body.cadre .card > .hint{display:none}
 body.cadre #cadreBtn{opacity:.55}

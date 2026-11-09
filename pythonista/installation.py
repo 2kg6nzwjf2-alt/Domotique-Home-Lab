@@ -40,11 +40,55 @@ def telecharger(url):
         return r.read()
 
 
+# Le dossier iCloud de Pythonista n'est pas dans le dossier privé de l'app (~) mais ici :
+CHEMINS_ICLOUD = (
+    "/private/var/mobile/Library/Mobile Documents/iCloud~com~omz-software~Pythonista3/Documents",
+    "/var/mobile/Library/Mobile Documents/iCloud~com~omz-software~Pythonista3/Documents",
+    os.path.expanduser("~/Library/Mobile Documents/iCloud~com~omz-software~Pythonista3/Documents"),
+)
+
+
+def dossier_icloud():
+    """Dossier « iCloud » de Pythonista, ou None si iCloud Drive n'est pas activé pour Pythonista."""
+    try:  # on le demande à iOS
+        from objc_util import ObjCClass
+        url = ObjCClass("NSFileManager").defaultManager().URLForUbiquityContainerIdentifier_(None)
+        if url:
+            chemin = os.path.join(str(url.path()), "Documents")
+            os.makedirs(chemin, exist_ok=True)
+            return chemin
+    except Exception:
+        pass
+    return next((c for c in CHEMINS_ICLOUD if os.path.isdir(c)), None)
+
+
 def dossier_cible():
+    """Renvoie (dossier Maison, dans iCloud ?, ancien dossier Maison sur l'appareil ou None)."""
     documents = os.path.expanduser("~/Documents")
-    icloud = os.path.expanduser("~/Library/Mobile Documents/iCloud~com~omz-software~Pythonista3/Documents")
-    base = icloud if os.path.isdir(icloud) else documents
-    return os.path.join(os.environ.get("MAISON_INSTALLER_BASE", base), "Maison"), base == icloud
+    if os.environ.get("MAISON_INSTALLER_BASE"):  # essais sur un ordinateur
+        return os.path.join(os.environ["MAISON_INSTALLER_BASE"], "Maison"), False, None
+    icloud = dossier_icloud()
+    local = os.path.join(documents, "Maison")
+    if icloud is None:
+        return local, False, None
+    return os.path.join(icloud, "Maison"), True, (local if os.path.isdir(local) else None)
+
+
+def migrer_donnees(ancien, cible):
+    """Copie les données d'un dossier Maison resté sur l'appareil vers celui d'iCloud.
+
+    Rien n'est copié si iCloud a déjà des données (installées depuis l'autre appareil) :
+    on ne remplace jamais le placard ou le ménage déjà partagés.
+    """
+    source, destination = os.path.join(ancien, "donnees"), os.path.join(cible, "donnees")
+    if not os.path.isdir(source):
+        return False
+    deja = [os.path.join(destination, "menage.json"), os.path.join(destination, "garde-manger", "etat.json")]
+    if any(os.path.exists(c) or os.path.exists(os.path.join(os.path.dirname(c), "." + os.path.basename(c) + ".icloud"))
+           for c in deja):
+        return False
+    shutil.copytree(source, destination, dirs_exist_ok=True)
+    return True
 
 
 def copier_si_change(source, destination):
@@ -104,11 +148,19 @@ def installer_bibliotheques():
 
 
 def main(contenu=None):
-    cible, icloud = dossier_cible()
+    cible, icloud, ancien = dossier_cible()
     reecrits = installer_programme(cible, contenu)
+    migre = migrer_donnees(ancien, cible) if ancien else False
     installer_bibliotheques()
     print()
     print("C'est installé dans :", cible)
+    if icloud:
+        print("Dossier iCloud : le placard et le ménage sont partagés entre l'iPhone et l'iPad.")
+    if migre:
+        print("Vos données de l'ancien dossier Maison (sur cet appareil) ont été copiées dans iCloud.")
+    if ancien:
+        print("L'ancien dossier Maison sous « This iPhone / This iPad » ne sert plus : vous pouvez le supprimer.")
+        print("Désormais, ouvrez Maison.py et Mettre à jour.py depuis le dossier Maison de la section iCloud.")
     if not icloud:
         print("Attention : iCloud Drive n'est pas activé pour Pythonista, l'iPad n'aura pas les mêmes données.")
         print("Réglages de l'appareil > votre nom > iCloud > iCloud Drive : activez Pythonista, puis relancez ce programme.")

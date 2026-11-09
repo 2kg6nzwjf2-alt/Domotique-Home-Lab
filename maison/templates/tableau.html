@@ -337,6 +337,12 @@ a.app span{color:var(--muted);font-size:13.5px}
 .idee small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
 
 /* réglages */
+.cals{border:1px solid var(--line);border-radius:12px;padding:10px 14px 12px;margin:14px 0 0;display:flex;flex-direction:column;gap:10px}
+.cals legend{font-weight:700;padding:0 6px}
+.cal-compte{display:flex;flex-direction:column;gap:2px}
+.cal{display:flex;align-items:center;gap:10px;padding:7px 0;font-size:15px;cursor:pointer}
+.cal input{width:20px;height:20px;accent-color:var(--accent);flex:none;margin:0}
+.cal .pastille{width:12px;height:12px;border-radius:50%;background:var(--c);flex:none}
 details.reglages summary{cursor:pointer;font-weight:600;color:var(--accent)}
 details.reglages[open] summary{margin-bottom:12px}
 .copy{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -851,6 +857,32 @@ if (APPAREIL){
     ? `<p class="hint"><span class="err">Synchronisation : le dossier Maison n’est pas dans iCloud, le placard et le ménage restent sur cet appareil.</span> Dans l’app Réglages de l’appareil : votre nom > iCloud > iCloud Drive, activez Pythonista. Puis relancez l’installation depuis le dossier Maison de la section iCloud de Pythonista.</p>`
     : `<p class="hint" id="r_synchro">Synchronisation : données partagées par iCloud${S.appareil ? ' (cet appareil : ' + esc(S.appareil) + ')' : ''}.</p>`);
   reg.querySelector('div').insertAdjacentHTML('beforeend', '<p class="hint" id="r_listes">Lecture des listes Rappels…</p>');
+  // calendriers affichés dans l'agenda du tableau de bord (comme la liste des Rappels)
+  reg.querySelector('div').insertAdjacentHTML('beforeend', '<fieldset class="cals" id="r_cals"><legend>Calendriers affichés</legend><p class="hint dots">Lecture des calendriers</p></fieldset>');
+  const COULEURS_CAL = ['#2f6fd0', '#d0612f', '#17907f', '#8a4fd0', '#c8487f', '#b8860b', '#4f8a2a', '#5a6680'];
+  fetch('api/agenda/calendriers').then(r => r.ok ? r.json() : Promise.reject(r.status)).then(d => {
+    const box = $('#r_cals'), titre = '<legend>Calendriers affichés</legend>';
+    if (!d.calendriers.length){ box.innerHTML = titre + `<p class="err">${esc(d.erreur || 'Aucun calendrier trouvé.')}</p>`; return; }
+    const tous = !d.choisis.length, choisis = new Set(d.choisis);
+    const comptes = [...new Set(d.calendriers.map(c => c.compte))];
+    box.innerHTML = titre + comptes.map(compte => `<div class="cal-compte"><p class="eyebrow">${esc(compte || 'Sur cet appareil')}</p>
+      ${d.calendriers.map((c, i) => [c, i]).filter(([c]) => c.compte === compte).map(([c, i]) => `<label class="cal">
+        <input type="checkbox" value="${esc(c.id)}"${tous || choisis.has(c.id) ? ' checked' : ''}>
+        <span class="pastille" style="--c:${COULEURS_CAL[i % COULEURS_CAL.length]}"></span>${esc(c.nom)}</label>`).join('')}</div>`).join('')
+      + `<p class="hint" id="r_calsMsg">${d.source === 'ical' ? 'Agendas de l’adresse iCal Google.' : 'Calendriers de l’appareil (iCloud, Google, Exchange…).'} Le choix est enregistré tout de suite.</p>`;
+    box.querySelectorAll('input').forEach(i => i.onchange = async () => {
+      const msg = $('#r_calsMsg'), coches = [...box.querySelectorAll('input:checked')].map(x => x.value);
+      if (!coches.length){ i.checked = true; msg.className = 'err'; msg.textContent = 'Gardez au moins un calendrier.'; return; }
+      msg.className = 'hint dots'; msg.textContent = 'Enregistrement';
+      try {
+        const r = await fetch('api/reglages', {method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({calendriers: coches.length === d.calendriers.length ? [] : coches})});  // tous cochés : liste vide
+        if (!r.ok) throw 0;
+        msg.className = 'ok'; msg.textContent = `Enregistré : ${coches.length} calendrier${coches.length > 1 ? 's' : ''} affiché${coches.length > 1 ? 's' : ''}.`;
+        delete semaines.agenda; charger();
+      } catch { msg.className = 'err'; msg.textContent = 'Échec de l’enregistrement.'; }
+    });
+  }).catch(() => { $('#r_cals').innerHTML = '<legend>Calendriers affichés</legend><p class="err">Impossible de lire les calendriers.</p>'; });
   fetch('api/rappels/listes').then(r => r.ok ? r.json() : Promise.reject(r.status)).then(d => {
     const sel = $('#r_liste'), actuelle = R.liste_courses || 'Courses';
     sel.innerHTML = d.listes.map(l => `<option value="${esc(l.nom)}"${l.nom === actuelle ? ' selected' : ''}>${esc(l.nom)}</option>`).join('')

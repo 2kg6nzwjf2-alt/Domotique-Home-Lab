@@ -47,6 +47,7 @@ En bas du tableau de bord, la section **Réglages** permet de choisir :
 - la ville pour la météo ;
 - la liste Rappels qui sert de liste de courses (« Courses » par défaut) ;
 - l'adresse iCal de Google (facultative : sans elle, l'agenda lit le calendrier de l'iPhone).
+- les **calendriers affichés** : cochez ceux que le tableau de bord doit montrer (tous par défaut), comme la liste des Rappels.
 
 Les réglages sont gardés dans le trousseau de l'appareil : saisissez-les une fois sur l'iPhone et une fois sur l'iPad.
 

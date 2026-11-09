@@ -20,6 +20,8 @@ DUREE_CACHE = 300  # secondes
 
 
 class Agenda:
+    choisis = None  # identifiants des agendas affichés ("ical-1", "ical-2"… ; None : tous)
+
     def __init__(self, adresses, fuseau="Europe/Paris", session=None):
         self.adresses = [a for a in adresses if a]
         self.fuseau = ZoneInfo(fuseau)
@@ -61,10 +63,23 @@ class Agenda:
         evenements, erreurs = self._entre(debut, debut + timedelta(days=nombre))
         return {"debut": debut.isoformat(), "jours": repartir_par_jour(evenements, debut, nombre, self.fuseau), "erreurs": erreurs}
 
+    def calendriers(self):
+        """Un agenda par adresse iCal : [{"id", "nom", "compte"}] (le nom est celui donné dans Google Agenda)."""
+        sortie = []
+        for numero, adresse in enumerate(self.adresses, start=1):
+            try:
+                nom = str(self._calendrier(adresse).get("X-WR-CALNAME", "") or f"Agenda {numero}")
+            except (requests.RequestException, ValueError):
+                nom = f"Agenda {numero} (illisible)"
+            sortie.append({"id": f"ical-{numero}", "nom": nom, "compte": "Google (adresse iCal)"})
+        return sortie
+
     def _entre(self, debut, fin):
         """Événements entre deux dates (fin exclue), tous agendas confondus, et erreurs de lecture."""
         evenements, erreurs = [], []
         for numero, adresse in enumerate(self.adresses, start=1):
+            if self.choisis and f"ical-{numero}" not in self.choisis:
+                continue
             try:
                 calendrier = self._calendrier(adresse)
             except (requests.RequestException, ValueError) as e:

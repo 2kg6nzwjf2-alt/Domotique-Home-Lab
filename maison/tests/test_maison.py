@@ -368,3 +368,11 @@ def test_meteo_semaine(appli):
     assert len(c.get("/api/agenda/semaine").get_json()["jours"]) == 7
     c = appli()
     assert "MAISON_VILLE" in c.get("/api/meteo/semaine").get_json()["erreur"]
+
+
+def test_agenda_ical_choix_des_calendriers():
+    a = Agenda(["https://calendar.google.com/secret/basic.ics", "https://calendar.google.com/autre/basic.ics"], session=FauxHTTP())
+    assert [c["id"] for c in a.calendriers()] == ["ical-1", "ical-2"] and a.calendriers()[0]["nom"] == "Famille"
+    tous = len(a.du_jour(date(2026, 11, 5))["evenements"])
+    a.choisis = {"ical-1"}
+    assert len(a.du_jour(date(2026, 11, 5))["evenements"]) == tous // 2

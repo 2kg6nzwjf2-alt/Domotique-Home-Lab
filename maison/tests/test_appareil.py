@@ -52,7 +52,7 @@ def test_reglages_et_anciennes_cles_effacees(tmp_path):
     a = appli_locale.Appli(str(tmp_path / "d"), plateforme.RappelsSimules(str(tmp_path / "r.json")), None, coffre)
     assert coffre.lire() == {"ville": "Lyon"}  # Smart Life retiré : clés effacées du trousseau
     r = a.enregistrer_reglages({"ville": "Brest", "liste_courses": "Épicerie", "agenda_ical": "https://x/basic.ics"})
-    assert r == {"ville": "Brest", "liste_courses": "Épicerie", "agenda_ical": True, "cadre": ""}
+    assert r == {"ville": "Brest", "liste_courses": "Épicerie", "agenda_ical": True, "cadre": "", "calendriers": []}
     assert "https://x" not in json.dumps(r)  # l'adresse iCal secrète ne revient pas à la page
     a.enregistrer_reglages({"agenda_ical": ""})
     assert coffre.lire()["agenda_ical"] == "https://x/basic.ics"  # vide = conservée
@@ -402,3 +402,26 @@ def test_croix_de_fermeture(appli):
     a.fermer = lambda: fermes.append(True)
     assert injecte(c.appel("GET", "/")[1], "MAISON")["fermer"] is True
     assert c.json("POST", "/api/fermer", {}) == (200, {"ok": True}) and fermes == [True]
+
+
+def test_choix_des_calendriers(tmp_path):
+    agenda = plateforme.AgendaSimule([ev("Réunion", "09:00", "10:00") | {"agenda": "Travail"},
+                                      ev("Piscine", "18:00", "19:00") | {"agenda": "Famille"}])
+    coffre = plateforme.CoffreFichier(str(tmp_path / "c.json"))
+    a = appli_locale.Appli(str(tmp_path / "d"), plateforme.RappelsSimules(str(tmp_path / "r.json")), agenda, coffre)
+    serveur, adresse = appli_locale.demarrer(a)
+    try:
+        c = Client(adresse)
+        d = c.json("GET", "/api/agenda/calendriers")[1]
+        assert [x["nom"] for x in d["calendriers"]] == ["Famille", "Travail"] and d["choisis"] == []
+        assert len(c.json("GET", "/api/tableau")[1]["agenda"]["evenements"]) == 2  # par défaut : tous
+        assert c.json("POST", "/api/reglages", {"calendriers": ["Famille"]})[1]["calendriers"] == ["Famille"]
+        assert [e["titre"] for e in c.json("GET", "/api/tableau")[1]["agenda"]["evenements"]] == ["Piscine"]
+        assert c.json("GET", "/api/agenda/calendriers")[1]["choisis"] == ["Famille"]
+        semaine = c.json("GET", "/api/agenda/semaine")[1]["jours"]
+        assert all(e["agenda"] == "Famille" for j in semaine for e in j["evenements"])
+        assert coffre.lire()["calendriers"] == ["Famille"]  # gardé dans le trousseau de l'appareil
+        c.json("POST", "/api/reglages", {"calendriers": []})  # vide : de nouveau tous
+        assert len(c.json("GET", "/api/tableau")[1]["agenda"]["evenements"]) == 2 and "calendriers" not in coffre.lire()
+    finally:
+        serveur.shutdown()

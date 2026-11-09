@@ -83,12 +83,17 @@ class Appli:
         if r.get("agenda_ical"):
             from agenda import Agenda  # bibliothèques installées par l'installeur ; seulement si une adresse iCal est donnée
             self._agenda_ical = Agenda.depuis_texte(r["agenda_ical"], r.get("fuseau") or "Europe/Paris")
+        choisis = r.get("calendriers")
+        for source in (self._agenda_ical, self.agenda_appareil):
+            if source is not None:
+                source.choisis = set(choisis) if isinstance(choisis, list) and choisis else None
 
     def reglages_publics(self):
         r = self.reglages
         publics = {k: r.get(k, "") for k in REGLAGES_PUBLICS}
         publics["liste_courses"] = publics["liste_courses"] or "Courses"
         publics["agenda_ical"] = bool(r.get("agenda_ical"))
+        publics["calendriers"] = list(r.get("calendriers") or [])
         return publics
 
     def enregistrer_reglages(self, nouveaux):
@@ -96,6 +101,13 @@ class Appli:
         for cle in REGLAGES_PUBLICS:
             if cle in nouveaux:
                 r[cle] = str(nouveaux[cle] or "").strip()[:200]
+        if "calendriers" in nouveaux:  # liste des calendriers affichés ; vide = tous
+            choix = nouveaux.get("calendriers")
+            choix = [str(c)[:300] for c in choix if str(c).strip()][:100] if isinstance(choix, list) else []
+            if choix:
+                r["calendriers"] = choix
+            else:
+                r.pop("calendriers", None)
         for cle in ("agenda_ical",):
             valeur = str(nouveaux.get(cle) or "").strip()
             if valeur:  # vide = on garde la valeur enregistrée
@@ -115,6 +127,17 @@ class Appli:
             return source.du_jour()
         except Exception as e:
             return {"evenements": [], "erreurs": [f"Agenda illisible ({type(e).__name__})"]}
+
+    def agenda_calendriers(self):
+        """Calendriers que l'on peut afficher, et ceux qui sont choisis (vide : tous)."""
+        source = self._agenda_ical or self.agenda_appareil
+        choisis = list(self.reglages.get("calendriers") or [])
+        if source is None:
+            return {"calendriers": [], "choisis": choisis, "erreur": "Aucun agenda : autorisez le Calendrier ou indiquez une adresse iCal."}
+        try:
+            return {"calendriers": source.calendriers(), "choisis": choisis, "source": "ical" if self._agenda_ical else "appareil"}
+        except Exception as e:
+            return {"calendriers": [], "choisis": choisis, "erreur": str(e) if isinstance(e, ValueError) else f"Calendriers illisibles ({type(e).__name__})"}
 
     def agenda_semaine(self):
         source = self._agenda_ical or self.agenda_appareil
@@ -285,6 +308,8 @@ class Gestionnaire(BaseHTTPRequestHandler):
             return self._envoyer(200, a.tableau())
         if chemin == "/api/reglages":
             return self._envoyer(200, a.reglages_publics())
+        if chemin == "/api/agenda/calendriers":
+            return self._envoyer(200, a.agenda_calendriers())
         if chemin == "/api/agenda/semaine":
             return self._envoyer(200, a.agenda_semaine())
         if chemin == "/api/meteo/semaine":

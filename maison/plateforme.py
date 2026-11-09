@@ -204,6 +204,7 @@ class AgendaIOS:
 
     # EKAuthorizationStatus : 0 pas encore demandé, 1 restreint, 2 refusé, 3 autorisé, 4 écriture seule
     AUTORISE = 3
+    choisis = None  # identifiants des calendriers affichés (None : tous)
 
     def __init__(self):
         from objc_util import ObjCClass
@@ -253,17 +254,40 @@ class AgendaIOS:
         evenements, erreurs = self._entre(debut, nombre)
         return {"debut": debut.isoformat(), "jours": repartir_par_jour(evenements, debut, nombre), "erreurs": erreurs}
 
+    def _magasin(self):
+        if self._store is None:
+            self._store = self._EKEventStore.alloc().init()
+        return self._store
+
+    def calendriers(self):
+        """Calendriers de l'appareil : [{"id", "nom", "compte"}], triés par compte puis par nom."""
+        probleme = self._autoriser()
+        if probleme:
+            raise ValueError(probleme)
+        sortie = []
+        for c in self._magasin().calendarsForEntityType_(0) or []:
+            source = c.source()
+            sortie.append({"id": str(c.calendarIdentifier()), "nom": str(c.title()),
+                           "compte": str(source.title()) if source else ""})
+        sortie.sort(key=lambda c: (c["compte"].lower(), c["nom"].lower()))
+        return sortie
+
     def _entre(self, jour, nombre):
         probleme = self._autoriser()
         if probleme:
             return [], [probleme]
-        if self._store is None:
-            self._store = self._EKEventStore.alloc().init()
+        magasin = self._magasin()
         debut = datetime.combine(jour, datetime.min.time()).astimezone()
         fin = datetime.combine(jour + timedelta(days=nombre), datetime.min.time()).astimezone()
-        predicat = self._store.predicateForEventsWithStartDate_endDate_calendars_(
+        calendriers = None  # tous
+        if self.choisis:
+            gardes = [c for c in magasin.calendarsForEntityType_(0) or [] if str(c.calendarIdentifier()) in self.choisis]
+            if gardes:  # calendriers choisis disparus (compte retiré) : on montre tout plutôt que rien
+                from objc_util import ns
+                calendriers = ns(gardes)
+        predicat = magasin.predicateForEventsWithStartDate_endDate_calendars_(
             self._NSDate.dateWithTimeIntervalSince1970_(debut.timestamp()),
-            self._NSDate.dateWithTimeIntervalSince1970_(fin.timestamp()), None)
+            self._NSDate.dateWithTimeIntervalSince1970_(fin.timestamp()), calendriers)
         evenements = []
         for e in self._store.eventsMatchingPredicate_(predicat) or []:
             if int(e.status()) == 3:  # annulé
@@ -285,29 +309,38 @@ class AgendaIOS:
 
 
 class AgendaSimule:
+    choisis = None  # noms des agendas affichés (None : tous)
+
     def __init__(self, evenements=None):
         self.evenements = evenements or []
 
+    def _garder(self, evenements):
+        return [e for e in evenements if not self.choisis or e.get("agenda", "Démo") in self.choisis]
+
+    def calendriers(self):
+        noms = sorted({e.get("agenda", "Démo") for e in self.evenements or _exemples_semaine(datetime.now().date())})
+        return [{"id": n, "nom": n, "compte": "Démonstration"} for n in noms]
+
     def du_jour(self, jour=None):
-        return {"jour": (jour or datetime.now().date()).isoformat(), "evenements": list(self.evenements), "erreurs": []}
+        return {"jour": (jour or datetime.now().date()).isoformat(), "evenements": self._garder(self.evenements), "erreurs": []}
 
     def semaine(self, debut=None, nombre=7):
         from liens import repartir_par_jour
         debut = debut or datetime.now().date()
-        evenements = list(self.evenements) or _exemples_semaine(debut)
+        evenements = self._garder(list(self.evenements) or _exemples_semaine(debut))
         return {"debut": debut.isoformat(), "jours": repartir_par_jour(evenements, debut, nombre), "erreurs": []}
 
 
 def _exemples_semaine(debut):
     """Rendez-vous d'exemple pour la démonstration sur ordinateur."""
-    exemples = [(0, "09:30", "10:30", "Réunion d'équipe"), (1, "18:30", "19:30", "Piscine des enfants"),
-                (2, "12:30", "14:00", "Déjeuner avec Claire"), (4, "20:00", "23:00", "Dîner chez Paul")]
+    exemples = [(0, "09:30", "10:30", "Réunion d'équipe", "Travail"), (1, "18:30", "19:30", "Piscine des enfants", "Famille"),
+                (2, "12:30", "14:00", "Déjeuner avec Claire", "Travail"), (4, "20:00", "23:00", "Dîner chez Paul", "Famille")]
     sortie = []
-    for n, h1, h2, titre in exemples:
+    for n, h1, h2, titre, agenda in exemples:
         jour = (debut + timedelta(days=n)).isoformat()
-        sortie.append({"titre": titre, "lieu": "", "debut": f"{jour}T{h1}:00", "fin": f"{jour}T{h2}:00", "journee": False, "agenda": "Démo"})
+        sortie.append({"titre": titre, "lieu": "", "debut": f"{jour}T{h1}:00", "fin": f"{jour}T{h2}:00", "journee": False, "agenda": agenda})
     sortie.append({"titre": "Vacances scolaires", "lieu": "", "debut": (debut + timedelta(days=5)).isoformat(),
-                   "fin": (debut + timedelta(days=7)).isoformat(), "journee": True, "agenda": "Démo"})
+                   "fin": (debut + timedelta(days=7)).isoformat(), "journee": True, "agenda": "Famille"})
     return sortie
 
 

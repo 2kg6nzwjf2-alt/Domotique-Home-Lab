@@ -172,20 +172,28 @@ def creer_appli():
         except Exception as e:
             print("Mode cadre : écran toujours allumé indisponible :", e)
             ecran = None
+        try:  # toucher une notification ouvre Maison
+            lien = "pythonista3://Maison/Maison.py?action=run" + ("&root=icloud" if "Mobile Documents" in os.path.abspath(DONNEES) else "")
+            notifieur = plateforme.NotificationsIOS(lien)
+        except Exception as e:
+            print("Notifications indisponibles :", e)
+            notifieur = None
     else:
         rappels = plateforme.RappelsSimules(os.path.join(DONNEES, "rappels-demo.json"))
         agenda = plateforme.AgendaSimule()
         coffre = plateforme.CoffreFichier(os.path.join(DONNEES, "reglages-demo.json"))
         scanner = icloud = ecran = None
+        notifieur = plateforme.NotificationsSimulees()
     # données partagées entre l'iPhone et l'iPad seulement si le dossier Maison est dans iCloud Drive
     partage = "icloud" if "Mobile Documents" in os.path.abspath(DONNEES) else "appareil"
     return appli_locale.Appli(DONNEES, rappels, agenda, coffre, scanner=scanner,
-                              icloud=icloud, appareil=plateforme.nom_appareil(), partage=partage, ecran=ecran)
+                              icloud=icloud, appareil=plateforme.nom_appareil(), partage=partage, ecran=ecran, notifieur=notifieur)
 
 
 def main():
     appli = creer_appli()
     serveur, adresse = appli_locale.demarrer(appli)
+    appli.demarrer_notifications()  # programmées pour 7 jours : elles arrivent même appli fermée
     if ui is None:
         print("Démonstration ouverte sur", adresse, "(Ctrl+C pour arrêter)")
         import webbrowser
@@ -222,6 +230,7 @@ def main():
             pass
     finally:
         serveur.shutdown()
+        appli.arreter_notifications()  # celles déjà programmées restent
         if appli.ecran is not None:  # mode cadre : l'écran peut de nouveau se mettre en veille
             try:
                 appli.ecran.garder_allume(False)

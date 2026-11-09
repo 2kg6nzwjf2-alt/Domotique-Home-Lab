@@ -425,3 +425,55 @@ def test_choix_des_calendriers(tmp_path):
         assert len(c.json("GET", "/api/tableau")[1]["agenda"]["evenements"]) == 2 and "calendriers" not in coffre.lire()
     finally:
         serveur.shutdown()
+
+
+# ---------- Notifications ----------
+def test_calcul_des_notifications():
+    import alertes
+    from menage import PLAN
+    maintenant = datetime(2026, 11, 9, 12, 0)  # lundi midi
+    menage = {"plan": PLAN, "fait": {"2026-11-10": ["t2"]},
+              "taches": [{"id": "t1", "piece": "cuisine", "titre": "Vaisselle", "jours": [0, 1]},
+                         {"id": "t2", "piece": "sdb", "titre": "Douche", "jours": [1]}]}
+    meteo = {"jours": [{"date": "2026-11-09", "pluie": 90, "libelle": "Pluie"}, {"date": "2026-11-10", "pluie": 80, "pluie_mm": 6.2, "libelle": "Averses"},
+                       {"date": "2026-11-11", "pluie": 10, "libelle": "Soleil"}]}
+    agenda = {"jours": [{"jour": "2026-11-09", "evenements": [
+        {"titre": "Dentiste", "lieu": "Cabinet", "debut": "2026-11-09T14:30:00", "journee": False},
+        {"titre": "Réunion passée", "debut": "2026-11-09T09:00:00", "journee": False},
+        {"titre": "Anniversaire", "debut": "2026-11-09", "journee": True}]}]}
+    etat = {"pantry": [{"id": "yaourt", "label": "Yaourts", "dlc": "2026-11-11"}, {"id": "lait", "label": "Lait"}]}
+    n = alertes.calculer({}, maintenant, menage, meteo, agenda, etat)
+    vus = [(x["quand"].strftime("%a %d %H:%M"), x["titre"], x["message"]) for x in n]
+    assert ("Mon 09 14:00", "Dans 30 min · 14:30", "Dentiste — Cabinet") in vus
+    assert ("Mon 09 20:00", "Pluie demain", "Averses : 80 % de risque, 6,2 mm. Pensez au parapluie.") in vus
+    assert ("Tue 10 08:00", "Ménage du jour", "Vaisselle (Cuisine + salle à manger)") in vus  # douche déjà faite
+    assert ("Tue 10 09:00", "Garde-manger", "À finir demain : Yaourts.") in vus
+    assert ("Wed 11 09:00", "Garde-manger", "À finir aujourd’hui : Yaourts.") in vus
+    assert not any("Réunion" in v[2] or "Anniversaire" in v[2] or "Soleil" in v[2] for v in vus)
+    assert not any(v[0] == "Mon 09 08:00" for v in vus)  # déjà passé
+    assert [x["quand"] for x in n] == sorted(x["quand"] for x in n)
+    # tout désactivé
+    assert alertes.calculer({"menage": "", "pluie": "", "rdv": "", "peremption": ""}, maintenant, menage, meteo, agenda, etat) == []
+    assert alertes.reglages_valides({"menage": "7h", "rdv": "999", "pluie": ""}) == {"menage": "08:00", "pluie": "", "rdv": "30", "peremption": "09:00"}
+
+
+def test_notifications_version_pythonista(tmp_path):
+    notifieur = plateforme.NotificationsSimulees()
+    coffre = plateforme.CoffreFichier(str(tmp_path / "c.json"))
+    a = appli_locale.Appli(str(tmp_path / "d"), plateforme.RappelsSimules(str(tmp_path / "r.json")), plateforme.AgendaSimule(), coffre, notifieur=notifieur)
+    serveur, adresse = appli_locale.demarrer(a)
+    try:
+        c = Client(adresse)
+        e = c.json("POST", "/api/notifications", {"reglages": {"menage": "07:30", "pluie": "", "rdv": "15", "peremption": ""}})[1]
+        assert e["disponible"] is True and e["reglages"]["menage"] == "07:30" and e["prevues"] == len(notifieur.programmees) > 0
+        assert all(x["titre"] in ("Ménage du jour",) or x["titre"].startswith("Dans 15 min") for x in notifieur.programmees)
+        assert coffre.lire()["notifications"]["rdv"] == "15"  # par appareil, dans le trousseau
+        assert c.json("GET", "/api/notifications")[1]["prochaine"]["titre"]
+        assert c.json("POST", "/api/notifications/essai", {}) == (200, {"ok": True}) and notifieur.essais == 1
+        # un changement (tâche du ménage) réveille le recalcul
+        a._notif_reveil.clear()
+        t = c.json("GET", "/api/tableau")[1]["menage"]["taches"][0]["id"]
+        c.json("POST", "/api/menage/cocher", {"tache": t, "date": "2026-11-09"})
+        assert a._notif_reveil.is_set()
+    finally:
+        serveur.shutdown()

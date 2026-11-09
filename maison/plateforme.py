@@ -384,6 +384,62 @@ class ScannerIOS:
         return codes[0][1]
 
 
+# ---------------------------------------------------------------- Notifications
+
+class NotificationsIOS:
+    """Notifications iOS programmées à l'avance (module notification de Pythonista) :
+    elles arrivent même quand l'appli est fermée. Toucher une notification ouvre Maison (`lien`)."""
+
+    def __init__(self, lien):
+        import notification
+        self._n = notification
+        self.lien = lien
+
+    def _les_notres(self):
+        try:
+            return [n for n in self._n.get_scheduled() or [] if (n.get("action_url") or "") == self.lien]
+        except Exception:
+            return []
+
+    def _envoyer(self, titre, message, delai):
+        try:
+            self._n.schedule(message, delay=delai, sound_name="default", action_url=self.lien, title=titre)
+        except TypeError:  # ancienne version de Pythonista, sans titre
+            self._n.schedule(f"{titre} : {message}", delai, "default", self.lien)
+
+    def programmer(self, liste):
+        """Remplace les notifications de Maison déjà programmées par `liste` ; renvoie leur nombre."""
+        for n in self._les_notres():
+            try:
+                self._n.cancel(n)
+            except Exception:
+                pass
+        maintenant, compte = datetime.now(), 0
+        for a in liste:
+            delai = (a["quand"] - maintenant).total_seconds()
+            if delai >= 1:
+                self._envoyer(a["titre"], a["message"], delai)
+                compte += 1
+        return compte
+
+    def essai(self):
+        self._envoyer("Maison", "Les notifications fonctionnent. Vous serez prévenu ici.", 5)
+
+
+class NotificationsSimulees:
+    """Pour l'ordinateur et les tests : garde la liste au lieu de la programmer."""
+
+    def __init__(self):
+        self.programmees, self.essais = [], 0
+
+    def programmer(self, liste):
+        self.programmees = list(liste)
+        return len(self.programmees)
+
+    def essai(self):
+        self.essais += 1
+
+
 # ---------------------------------------------------------------- Écran
 
 class EcranIOS:

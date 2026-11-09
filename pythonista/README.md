@@ -11,6 +11,7 @@ L'appli Maison (tableau de bord et Garde-manger) tourne directement sur l'iPhone
 | Garde-manger | hors connexion ; placard et courses partagés par iCloud entre l'iPhone et l'iPad |
 | Codes-barres | dans Garde-manger, **Scanner un code-barres** prend une photo du code et range le produit au placard (fiche Open Food Facts) |
 | Dates de péremption | dans Garde-manger, une date « à consommer avant » par produit (au scan ou en touchant le produit) ; le tableau de bord signale ce qui doit être fini et propose une recette |
+| Notifications | ménage du jour le matin, pluie la veille au soir, rendez-vous un peu avant, produits à finir ; programmées pour 7 jours, elles arrivent même appli fermée (Réglages > Notifications) |
 | Mode cadre | bouton en haut à droite : écran toujours allumé, grand texte, sombre la nuit (iPad posé dans la maison) |
 | Courses | les ingrédients manquants d'une recette sont ajoutés à votre liste Rappels « Courses » |
 | Ce soir | Garde-manger propose une recette rapide si la soirée est chargée, et rien si vous dînez dehors |
@@ -63,7 +64,7 @@ Pour fermer l'appli, touchez la croix ronde en haut à gauche de la page, ou gli
 
 ## Limites
 
-- L'appli se met à jour seulement quand elle est ouverte : pas de notification quand elle est fermée.
+- Les notifications sont programmées pour les 7 jours suivants à chaque ouverture de l'appli : ouvrez Maison au moins une fois par semaine pour qu'elles continuent, et pour qu'elles tiennent compte des derniers changements faits sur l'autre appareil.
 - Les fonctions Claude de Garde-manger (recette d'un plat inconnu, idées, photo du frigo) ne sont pas dans cette version.
 - Si Pythonista n'a pas le droit de lire le Calendrier, l'agenda le signale : indiquez alors l'adresse iCal de Google dans les Réglages.
 

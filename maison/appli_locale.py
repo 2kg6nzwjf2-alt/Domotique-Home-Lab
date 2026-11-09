@@ -12,6 +12,7 @@ import os
 import re
 import sys
 import threading
+import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
@@ -27,6 +28,7 @@ from liens import soiree  # noqa: E402
 from plateforme import ListeIntrouvable  # noqa: E402
 from plateforme import _cle_liste as plateforme_cle_liste  # noqa: E402
 from menage import Menage, PlanningDepasse  # noqa: E402
+import alertes  # noqa: E402
 from meteo import ErreurMeteo, Meteo  # noqa: E402
 from stockage import EnAttenteICloud, EtatTropGros, Stockage, VersionDepassee  # noqa: E402  (garde-manger/stockage.py)
 from codes_barres import ErreurCode, OpenFoodFacts, code_valide  # noqa: E402  (garde-manger/codes_barres.py)
@@ -46,7 +48,7 @@ class Appli:
     """Toute la logique de l'appli, indépendante du serveur HTTP (facile à tester)."""
 
     def __init__(self, dossier_donnees, rappels, agenda_appareil, coffre, scanner=None, off=None,
-                 icloud=None, appareil=None, partage=None, ecran=None):
+                 icloud=None, appareil=None, partage=None, ecran=None, notifieur=None):
         """`icloud` : objet avec `rafraichir(chemin)` (téléchargement depuis iCloud avant lecture).
         `partage` : "icloud" si les données sont dans iCloud Drive, "appareil" sinon (affiché dans les Réglages)."""
         self.rappels, self.agenda_appareil, self.coffre = rappels, agenda_appareil, coffre
@@ -54,6 +56,11 @@ class Appli:
         self.appareil, self.partage = appareil, partage
         self.icloud, self.dossier_donnees = icloud, dossier_donnees
         self.ecran = ecran  # objet avec garder_allume(bool) : mode cadre
+        self.notifieur = notifieur  # objet avec programmer(liste) et essai() : notifications iOS
+        self._notif_etat = {"prevues": 0, "prochaine": None, "maj": None}
+        self._notif_verrou = threading.Lock()
+        self._notif_reveil = threading.Event()
+        self._notif_arret = False
         self.fermer = None  # fonction qui ferme l'appli (Pythonista) : croix de la page
         self.marge_haut = 0  # hauteur de la barre d'état quand la barre de titre de Pythonista est masquée
         rafraichir = icloud.rafraichir if icloud is not None else None
@@ -101,6 +108,8 @@ class Appli:
         for cle in REGLAGES_PUBLICS:
             if cle in nouveaux:
                 r[cle] = str(nouveaux[cle] or "").strip()[:200]
+        if "notifications" in nouveaux:
+            r["notifications"] = alertes.reglages_valides(nouveaux["notifications"])
         if "calendriers" in nouveaux:  # liste des calendriers affichés ; vide = tous
             choix = nouveaux.get("calendriers")
             choix = [str(c)[:300] for c in choix if str(c).strip()][:100] if isinstance(choix, list) else []
@@ -127,6 +136,58 @@ class Appli:
             return source.du_jour()
         except Exception as e:
             return {"evenements": [], "erreurs": [f"Agenda illisible ({type(e).__name__})"]}
+
+    # ---------- Notifications ----------
+    def reglages_notifications(self):
+        return alertes.reglages_valides(self.reglages.get("notifications"))
+
+    def planifier_notifications(self, maintenant=None):
+        """Calcule les notifications des 7 prochains jours et les programme (remplace les précédentes)."""
+        with self._notif_verrou:
+            r = self.reglages_notifications()
+            meteo = None
+            if r["pluie"] and self._meteo is not None:
+                try:
+                    meteo = self._meteo.semaine()
+                except Exception:
+                    meteo = None
+            agenda = self.agenda_semaine() if r["rdv"] else None
+            liste = alertes.calculer(r, maintenant, self.menage.lire(), meteo, agenda, self.etat_gm.lire()[1])
+            prevues = self.notifieur.programmer(liste) if self.notifieur is not None else len(liste)
+            prochaine = liste[0] if liste else None
+            self._notif_etat = {
+                "prevues": prevues,
+                "prochaine": {"quand": prochaine["quand"].isoformat(timespec="minutes"), "titre": prochaine["titre"],
+                              "message": prochaine["message"]} if prochaine else None,
+                "maj": datetime.now().isoformat(timespec="minutes"),
+            }
+            return self.etat_notifications()
+
+    def etat_notifications(self):
+        return {"disponible": self.notifieur is not None, "reglages": self.reglages_notifications(), **self._notif_etat}
+
+    def signaler_changement(self):
+        """Une donnée a changé (placard, ménage, réglages) : les notifications seront recalculées."""
+        self._notif_reveil.set()
+
+    def demarrer_notifications(self, intervalle=1200):
+        """Programme les notifications maintenant, puis toutes les 20 minutes et après chaque changement."""
+        def boucle():
+            while not self._notif_arret:
+                try:
+                    self.planifier_notifications()
+                except Exception as e:
+                    print("Notifications non programmées :", e)
+                self._notif_reveil.wait(intervalle)
+                if self._notif_arret:
+                    break
+                time.sleep(3)  # plusieurs changements rapprochés : un seul recalcul
+                self._notif_reveil.clear()
+        threading.Thread(target=boucle, daemon=True).start()
+
+    def arreter_notifications(self):
+        self._notif_arret = True
+        self._notif_reveil.set()
 
     def agenda_calendriers(self):
         """Calendriers que l'on peut afficher, et ceux qui sont choisis (vide : tous)."""
@@ -308,6 +369,8 @@ class Gestionnaire(BaseHTTPRequestHandler):
             return self._envoyer(200, a.tableau())
         if chemin == "/api/reglages":
             return self._envoyer(200, a.reglages_publics())
+        if chemin == "/api/notifications":
+            return self._envoyer(200, a.etat_notifications())
         if chemin == "/api/agenda/calendriers":
             return self._envoyer(200, a.agenda_calendriers())
         if chemin == "/api/agenda/semaine":
@@ -344,6 +407,7 @@ class Gestionnaire(BaseHTTPRequestHandler):
         return self._envoyer(404, {"code": "introuvable"})
 
     def do_PUT(self):
+        self.appli.signaler_changement()  # placard ou planning du ménage : notifications recalculées
         if urlsplit(self.path).path == "/api/menage/taches":
             try:
                 corps = self._corps()
@@ -375,6 +439,8 @@ class Gestionnaire(BaseHTTPRequestHandler):
 
     def do_POST(self):
         a, chemin = self.appli, urlsplit(self.path).path
+        if chemin in ("/api/menage/cocher", "/api/reglages"):
+            a.signaler_changement()  # notifications recalculées (tâche faite, ville, calendriers…)
         try:
             corps = self._corps()
         except ValueError as e:
@@ -384,6 +450,14 @@ class Gestionnaire(BaseHTTPRequestHandler):
                 return self._envoyer(200, {"ok": bool(a.rappels.terminer(str(corps.get("id") or "")))})
             if chemin == "/api/reglages":
                 return self._envoyer(200, a.enregistrer_reglages(corps))
+            if chemin == "/api/notifications":
+                a.enregistrer_reglages({"notifications": corps.get("reglages")})
+                return self._envoyer(200, a.planifier_notifications())
+            if chemin == "/api/notifications/essai":
+                if a.notifieur is None:
+                    return self._envoyer(404, {"code": "indisponible", "message": "Notifications disponibles seulement dans Pythonista."})
+                a.notifieur.essai()
+                return self._envoyer(200, {"ok": True})
             if chemin == "/api/fermer":
                 if a.fermer is None:
                     return self._envoyer(404, {"code": "introuvable"})

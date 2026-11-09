@@ -343,6 +343,12 @@ a.app span{color:var(--muted);font-size:13.5px}
 .cal{display:flex;align-items:center;gap:10px;padding:7px 0;font-size:15px;cursor:pointer}
 .cal input{width:20px;height:20px;accent-color:var(--accent);flex:none;margin:0}
 .cal .pastille{width:12px;height:12px;border-radius:50%;background:var(--c);flex:none}
+.notif{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 0;font-size:15px}
+.notif label{display:flex;align-items:center;gap:10px;cursor:pointer;flex:1 1 200px;min-width:0}
+.notif input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent);margin:0;flex:none}
+.notif .quand{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13.5px}
+.notif input[type=time],.notif select{font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:1.5px solid var(--line);border-radius:8px;padding:4px 6px}
+.notif input:disabled,.notif select:disabled{opacity:.45}
 details.reglages summary{cursor:pointer;font-weight:600;color:var(--accent)}
 details.reglages[open] summary{margin-bottom:12px}
 .copy{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -883,6 +889,49 @@ if (APPAREIL){
       } catch { msg.className = 'err'; msg.textContent = 'Échec de l’enregistrement.'; }
     });
   }).catch(() => { $('#r_cals').innerHTML = '<legend>Calendriers affichés</legend><p class="err">Impossible de lire les calendriers.</p>'; });
+
+  // notifications programmées pour les 7 prochains jours (elles arrivent même appli fermée)
+  reg.querySelector('div').insertAdjacentHTML('beforeend', '<fieldset class="cals" id="r_notifs"><legend>Notifications</legend><p class="hint dots">Lecture</p></fieldset>');
+  const NOTIFS = [
+    ['menage', 'Ménage du jour', 'à', 'time', '08:00'],
+    ['pluie', 'Pluie le lendemain', 'la veille à', 'time', '20:00'],
+    ['rdv', 'Rendez-vous de l’agenda', '', 'select', '30'],
+    ['peremption', 'Produits à finir (Garde-manger)', 'à', 'time', '09:00'],
+  ];
+  const dateNotif = iso => { const d = new Date(iso), j = jourCle(d), auj = jourCle(new Date()), dem = jourCle(new Date(Date.now() + 864e5));
+    return (j === auj ? 'aujourd’hui' : j === dem ? 'demain' : 'le ' + fmt({weekday:'long', day:'numeric'}, d)) + ' à ' + heure(d); };
+  function dessinerNotifs(e){
+    const box = $('#r_notifs'), r = e.reglages;
+    box.innerHTML = '<legend>Notifications</legend>' + NOTIFS.map(([cle, nom, avant, type, defaut]) => {
+      const actif = !!r[cle], valeur = r[cle] || defaut;
+      const champ = type === 'time' ? `<input type="time" data-v="${cle}" value="${esc(valeur)}"${actif ? '' : ' disabled'}>`
+        : `<select data-v="${cle}"${actif ? '' : ' disabled'}>${[10, 15, 30, 60, 120].map(m => `<option value="${m}"${String(m) === valeur ? ' selected' : ''}>${m < 60 ? m + ' min' : m / 60 + ' h'}</option>`).join('')}</select> avant`;
+      return `<div class="notif"><label><input type="checkbox" data-c="${cle}"${actif ? ' checked' : ''}> ${nom}</label><span class="quand">${avant} ${champ}</span></div>`;
+    }).join('') + `<p class="hint" id="r_notifsMsg">${e.prevues ? `${e.prevues} notification${e.prevues > 1 ? 's' : ''} prévue${e.prevues > 1 ? 's' : ''} sur 7 jours`
+        + (e.prochaine ? ` · prochaine ${dateNotif(e.prochaine.quand)} : <b>${esc(e.prochaine.titre)}</b>` : '') : 'Aucune notification prévue pour le moment.'}</p>`
+      + (e.disponible ? '<div><button class="btn ghost small" type="button" id="r_essai">Envoyer une notification d’essai</button> <span class="hint" id="r_essaiMsg"></span></div>'
+        : '<p class="hint">Les notifications ne partent que depuis Pythonista, sur l’iPhone ou l’iPad.</p>')
+      + '<p class="hint">Réglées pour cet appareil : désactivez-les sur l’iPad pour ne pas les recevoir deux fois.</p>';
+    const enregistrer = async () => {
+      const reglages = {};
+      NOTIFS.forEach(([cle]) => { reglages[cle] = box.querySelector(`[data-c="${cle}"]`).checked ? box.querySelector(`[data-v="${cle}"]`).value : ''; });
+      $('#r_notifsMsg').className = 'hint dots'; $('#r_notifsMsg').textContent = 'Programmation';
+      try {
+        const rep = await fetch('api/notifications', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({reglages})});
+        if (!rep.ok) throw 0;
+        dessinerNotifs(await rep.json());
+      } catch { $('#r_notifsMsg').className = 'err'; $('#r_notifsMsg').textContent = 'Échec de l’enregistrement.'; }
+    };
+    box.querySelectorAll('[data-c]').forEach(c => c.onchange = () => { box.querySelector(`[data-v="${c.dataset.c}"]`).disabled = !c.checked; enregistrer(); });
+    box.querySelectorAll('[data-v]').forEach(v => v.onchange = enregistrer);
+    $('#r_essai')?.addEventListener('click', async () => {
+      try { const rep = await fetch('api/notifications/essai', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'}); if (!rep.ok) throw 0;
+        $('#r_essaiMsg').textContent = 'Elle arrive dans 5 secondes : revenez à l’écran d’accueil pour la voir.'; }
+      catch { $('#r_essaiMsg').textContent = 'Échec de l’envoi.'; }
+    });
+  }
+  fetch('api/notifications').then(r => r.ok ? r.json() : Promise.reject()).then(dessinerNotifs)
+    .catch(() => { $('#r_notifs').innerHTML = '<legend>Notifications</legend><p class="err">Réglages des notifications illisibles.</p>'; });
   fetch('api/rappels/listes').then(r => r.ok ? r.json() : Promise.reject(r.status)).then(d => {
     const sel = $('#r_liste'), actuelle = R.liste_courses || 'Courses';
     sel.innerHTML = d.listes.map(l => `<option value="${esc(l.nom)}"${l.nom === actuelle ? ' selected' : ''}>${esc(l.nom)}</option>`).join('')

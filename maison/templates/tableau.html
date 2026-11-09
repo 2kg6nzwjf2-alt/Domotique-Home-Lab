@@ -122,14 +122,16 @@ dialog.fenetre input,dialog.fenetre select,dialog.fenetre textarea{font-size:16p
 .f-corps h3{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:16px 0 8px}
 .f-corps h3:first-child{margin-top:4px}
 /* Météo de la semaine */
-.jours7{display:grid;grid-template-columns:repeat(7,minmax(66px,1fr));gap:6px;overflow-x:auto;padding-bottom:4px}
-.jours7 button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;cursor:pointer}
+/* 7 colonnes qui tiennent dans la largeur : pas de défilement (mal redessiné par l'iPhone dans une fenêtre) */
+.jours7{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.jours7 button{display:flex;flex-direction:column;align-items:center;gap:1px;padding:7px 0 6px;border-radius:11px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;cursor:pointer;min-width:0;-webkit-tap-highlight-color:transparent}
 .jours7 button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
-.jours7 .n{font-size:12px;font-weight:700;color:var(--muted);white-space:nowrap}
-.jours7 svg{width:32px;height:32px}
-.jours7 .mm{font-family:var(--f-mono);font-size:12.5px;white-space:nowrap}
-.jours7 .mm span{color:var(--muted)}
-.jours7 .p{font-size:11.5px;color:var(--accent);min-height:1.3em}
+.jours7 .n{font-size:11.5px;font-weight:700;color:var(--muted);line-height:1.2;text-align:center}
+.jours7 button[aria-pressed="true"] .n{color:var(--accent)}
+.jours7 svg{width:28px;height:28px;margin:2px 0}
+.jours7 .mx{font-family:var(--f-mono);font-size:13px;line-height:1.2}
+.jours7 .mn{font-family:var(--f-mono);font-size:12px;color:var(--muted);line-height:1.2}
+.jours7 .p{font-size:11px;color:var(--accent);min-height:1.3em}
 .detail{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
 .detail div{background:var(--bg);border-radius:10px;padding:8px 10px;font-size:12.5px;color:var(--muted)}
 .detail b{display:block;color:var(--ink);font-size:15px;font-weight:600}
@@ -660,6 +662,8 @@ const ICONES = {
   brouillard: '<path d="M13 28h22a8 8 0 0 0 0-16 11 11 0 0 0-21 4A6 6 0 0 0 13 28z" fill="#aeb9cf"/><g stroke="#8d99b3" stroke-width="3" stroke-linecap="round"><path d="M9 34h30M13 40h22"/></g>',
   pluie: '<path d="M13 30h22a8 8 0 0 0 0-16 11 11 0 0 0-21 4A6 6 0 0 0 13 30z" fill="#aeb9cf"/><g stroke="#3d7bd9" stroke-width="3" stroke-linecap="round"><path d="M16 35l-2 6M24 35l-2 6M32 35l-2 6"/></g>',
   neige: '<path d="M13 30h22a8 8 0 0 0 0-16 11 11 0 0 0-21 4A6 6 0 0 0 13 30z" fill="#aeb9cf"/><g fill="#7fb3f0"><circle cx="16" cy="38" r="2.4"/><circle cx="24" cy="41" r="2.4"/><circle cx="32" cy="38" r="2.4"/></g>',
+  lune: '<path d="M30 8a16 16 0 1 0 10 28A13 13 0 0 1 30 8z" fill="#f2c45d"/>',
+  lune_nuage: '<path d="M22 6a12 12 0 1 0 8 21A10 10 0 0 1 22 6z" fill="#f2c45d"/><path d="M15 40h20a8 8 0 0 0 0-16 11 11 0 0 0-20.5 4A6 6 0 0 0 15 40z" fill="#c9d2e3"/>',
   orage: '<path d="M13 28h22a8 8 0 0 0 0-16 11 11 0 0 0-21 4A6 6 0 0 0 13 28z" fill="#8d99b3"/><path d="M25 28l-6 9h6l-3 8 9-11h-6l3-6z" fill="#f2b33d"/>',
 };
 const icone = nom => `<svg viewBox="0 0 48 48" aria-hidden="true">${ICONES[nom] || ICONES.nuage}</svg>`;
@@ -773,7 +777,11 @@ const vue = window.visualViewport;
 function ajusterFenetres(){
   if (!vue) return;
   const r = document.documentElement.style;
-  r.setProperty('--vvh', vue.height + 'px'); r.setProperty('--vvtop', vue.offsetTop + 'px');
+  // Dans Pythonista, offsetTop suit aussi le défilement de la page : on ne s'en sert que si le clavier
+  // réduit vraiment la partie visible, et jamais au-delà de la place qu'il prend.
+  const pris = Math.max(0, window.innerHeight - vue.height);
+  r.setProperty('--vvh', vue.height + 'px');
+  r.setProperty('--vvtop', (pris > 120 ? Math.min(Math.max(vue.offsetTop, 0), pris) : 0) + 'px');
   // clavier qui s'ouvre : le champ en cours de saisie remonte dans la partie visible
   const champ = document.activeElement;
   if (champ?.matches?.('dialog.fenetre input, dialog.fenetre select, dialog.fenetre textarea'))
@@ -807,7 +815,7 @@ async function chargerSemaine(quoi){
 }
 const dateDe = iso => { const [a, m, j] = String(iso).split('-').map(Number); return new Date(a, m - 1, j, 12); };
 const majuscule = s => s.charAt(0).toUpperCase() + s.slice(1);
-const nomCourt = (iso, i) => i === 0 ? 'Auj.' : i === 1 ? 'Dem.' : majuscule(fmt({weekday:'short', day:'numeric'}, dateDe(iso)));
+const nomCourt = (iso, i) => (i === 0 ? 'Auj.' : i === 1 ? 'Dem.' : majuscule(fmt({weekday:'short'}, dateDe(iso)))) + '<br>' + fmt({day:'numeric'}, dateDe(iso));
 const nomLong = (iso, i) => (i === 0 ? 'Aujourd’hui · ' : i === 1 ? 'Demain · ' : '') + (i < 2 ? fmt({weekday:'long', day:'numeric', month:'long'}, dateDe(iso)) : majuscule(fmt({weekday:'long', day:'numeric', month:'long'}, dateDe(iso))));
 const nombre = (v, unite, dec=0) => v == null ? '–' : `${(+v).toFixed(dec).replace('.', ',')} ${unite}`;
 
@@ -817,15 +825,26 @@ async function ouvrirMeteo(){
   try {
     const d = await chargerSemaine('meteo');
     if (d.erreur) throw new Error(d.erreur);
-    dessinerMeteo(d, 0);
+    dessinerMeteo(d);
   } catch (e) { fenetreSemaine('Météo de la semaine', `<p class="err">${esc(e.message || 'Météo indisponible pour le moment.')}</p>`); }
 }
-function dessinerMeteo(d, choisi){
+function dessinerMeteo(d){
+  if (!d.jours?.length){ fenetreSemaine('Météo de la semaine', '<p class="err">Pas de prévisions pour le moment.</p>'); return; }
+  const boutons = d.jours.map((x, i) => `<button type="button" data-i="${i}" aria-pressed="${i === 0}">
+      <span class="n">${nomCourt(x.date, i)}</span>${icone(x.icone)}
+      <span class="mx">${degres(x.max)}</span><span class="mn">${degres(x.min)}</span><span class="p">${x.pluie ? Math.round(x.pluie) + ' %' : ''}</span></button>`).join('');
+  fenetreSemaine(`Météo${d.lieu ? ' · ' + esc(d.lieu) : ''}`, `<div class="jours7" role="group" aria-label="Jour">${boutons}</div><div id="mJour"></div>
+    <p class="credit" style="margin-top:12px">Données <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></p>`);
+  const bandeau = dlgSemaine.querySelector('.jours7');
+  bandeau.querySelectorAll('button').forEach(b => b.onclick = () => {
+    bandeau.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    montrerJour(d, +b.dataset.i);
+  });
+  montrerJour(d, 0);
+}
+// détail d'un jour : seul ce bloc est remplacé quand on change de jour
+function montrerJour(d, choisi){
   const j = d.jours[choisi];
-  if (!j){ fenetreSemaine('Météo de la semaine', '<p class="err">Pas de prévisions pour le moment.</p>'); return; }
-  const boutons = d.jours.map((x, i) => `<button type="button" data-i="${i}" aria-pressed="${i === choisi}">
-      <span class="n">${esc(nomCourt(x.date, i))}</span>${icone(x.icone)}
-      <span class="mm">${degres(x.max)} <span>${degres(x.min)}</span></span><span class="p">${x.pluie ? Math.round(x.pluie) + ' %' : ''}</span></button>`).join('');
   let heures = j.heures || [];
   if (choisi === 0){ const h = heure(new Date()).slice(0, 2); heures = heures.filter(x => x.heure.slice(0, 2) >= h); }
   const pluie = j.pluie == null ? '–' : `${Math.round(j.pluie)} %` + (j.pluie_mm ? ` · ${nombre(j.pluie_mm, 'mm', 1)}` : '');
@@ -836,14 +855,12 @@ function dessinerMeteo(d, choisi){
     ['Indice UV', j.uv == null ? '–' : Math.round(j.uv)],
     ['Soleil', j.lever ? `${j.lever} – ${j.coucher}` : '–'],
   ].map(([n, v]) => `<div>${n}<b>${v}</b></div>`).join('');
-  const lignes = heures.map(x => `<div><span>${esc(x.heure)}</span>${icone(x.icone)}<span class="t">${degres(x.temperature)}</span>
+  const nuit = x => j.lever && j.coucher && (x.heure < j.lever.slice(0, 2) + ':00' || x.heure > j.coucher);
+  const iconeHeure = x => icone(nuit(x) ? ({soleil:'lune', eclaircie:'lune_nuage'}[x.icone] || x.icone) : x.icone);
+  const lignes = heures.map(x => `<div><span>${esc(x.heure)}</span>${iconeHeure(x)}<span class="t">${degres(x.temperature)}</span>
       <span class="p">${x.pluie ? Math.round(x.pluie) + ' %' : ''}</span><span>${x.vent == null ? '' : Math.round(x.vent) + ' km/h'}</span></div>`).join('');
-  fenetreSemaine(`Météo${d.lieu ? ' · ' + esc(d.lieu) : ''}`, `<div class="jours7" role="group" aria-label="Jour">${boutons}</div>
-    <h3>${esc(nomLong(j.date, choisi))} : ${esc(j.libelle)}</h3><div class="detail">${detail}</div>
-    ${lignes ? `<h3>Heure par heure</h3><div class="heures">${lignes}</div>` : ''}
-    <p class="credit" style="margin-top:12px">Données <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></p>`);
-  const bandeau = dlgSemaine.querySelector('.jours7');
-  bandeau.querySelectorAll('button').forEach(b => b.onclick = () => { const x = bandeau.scrollLeft; dessinerMeteo(d, +b.dataset.i); dlgSemaine.querySelector('.jours7').scrollLeft = x; });
+  $('#mJour').innerHTML = `<h3>${esc(nomLong(j.date, choisi))} : ${esc(j.libelle)}</h3><div class="detail">${detail}</div>
+    ${lignes ? `<h3>Heure par heure</h3><div class="heures">${lignes}</div>` : ''}`;
 }
 
 async function ouvrirAgenda(){

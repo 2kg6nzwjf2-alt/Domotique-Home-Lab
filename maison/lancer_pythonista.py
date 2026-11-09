@@ -11,10 +11,31 @@ import time
 
 # Dossier « Maison » sur l'iPhone (racine du dépôt sur un ordinateur)
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-for dossier in ("maison", "garde-manger"):
-    chemin = os.path.join(RACINE, dossier)
-    if chemin not in sys.path:
+NOS_DOSSIERS = [os.path.join(RACINE, d) for d in ("maison", "garde-manger")]
+
+
+def oublier_anciens_modules():
+    """Pythonista garde en mémoire les modules d'un lancement à l'autre.
+
+    Si l'appli a d'abord été lancée depuis un autre dossier Maison (par exemple l'ancien,
+    sur l'appareil, avant le passage dans iCloud), ses modules et ses chemins resteraient
+    utilisés : on les oublie pour charger ceux de ce dossier-ci.
+    """
+    def a_nous(chemin):
+        return os.path.basename(os.path.normpath(chemin)) in ("maison", "garde-manger")
+
+    sys.path[:] = [c for c in sys.path if not (c and a_nous(c) and os.path.normpath(c) not in NOS_DOSSIERS)]
+    for nom, module in list(sys.modules.items()):
+        fichier = getattr(module, "__file__", None)
+        if nom != "__main__" and fichier and a_nous(os.path.dirname(os.path.abspath(fichier))):
+            del sys.modules[nom]  # rechargé depuis ce dossier à l'import suivant
+    for chemin in reversed(NOS_DOSSIERS):
+        if chemin in sys.path:
+            sys.path.remove(chemin)
         sys.path.insert(0, chemin)
+
+
+oublier_anciens_modules()
 
 try:
     import ui  # présent seulement dans Pythonista

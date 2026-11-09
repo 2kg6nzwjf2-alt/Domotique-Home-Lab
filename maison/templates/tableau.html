@@ -148,6 +148,28 @@ dialog.fenetre input,dialog.fenetre select,dialog.fenetre textarea{font-size:16p
 .sem-vide{color:var(--muted);font-size:13.5px;margin:0}
 #carteMeteo #meteo,#carteAgenda #agenda{cursor:pointer}
 .editeur-aide{margin:0 0 4px}
+/* Planning du ménage : une section par pièce, une carte par tâche (bord de la couleur de la pièce) */
+.piece-ed{padding:12px 0 6px;border-top:1px solid var(--line)}
+.piece-ed:first-of-type{border-top:0}
+.pe-tete{display:flex;align-items:center;gap:8px;margin:0 0 8px}
+.pe-tete .pastille{width:14px;height:14px;border-radius:4px;background:var(--c);flex:none}
+.f-corps .pe-tete h3{margin:0;font-size:16px;font-weight:700;text-transform:none;letter-spacing:0;color:var(--ink);min-width:0;overflow-wrap:anywhere}
+.pe-tete .nb{font-size:12.5px;color:var(--muted);white-space:nowrap}
+.pe-tete .btn{margin-left:auto}
+.pe-vide{margin:0 0 6px 22px;font-size:13px;color:var(--muted)}
+.tache-ed{border:1.5px solid var(--line);border-left:6px solid var(--c);border-radius:12px;padding:10px 12px;margin:0 0 10px;background:var(--bg);display:flex;flex-direction:column;gap:9px}
+.tache-ed.manque{border-color:var(--bad);border-left-color:var(--bad);background:var(--bad-soft)}
+.te-haut{display:flex;gap:8px;align-items:center}
+.te-num{width:24px;height:24px;border-radius:50%;background:var(--c);color:#fff;font-size:12.5px;font-weight:700;display:grid;place-items:center;flex:none}
+dialog.fenetre .te-titre{flex:1;min-width:0;font:inherit;font-size:16px;font-weight:600;color:var(--ink);border:1.5px solid var(--line);background:var(--surface);border-radius:9px;padding:8px 10px}
+.te-suppr{border:0;background:transparent;color:var(--bad);font:inherit;font-size:13px;font-weight:600;padding:6px 4px;cursor:pointer;flex:none}
+.tache-ed .jours{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
+.tache-ed .jours button{width:auto;height:38px;font-size:13.5px;border-radius:9px;cursor:pointer}
+.tache-ed .jours button[aria-pressed="true"]{background:var(--c);border-color:var(--c);color:#fff}
+.te-bas{display:flex;justify-content:space-between;align-items:center;gap:6px 10px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.te-resume{font-weight:600}
+.te-piece{display:flex;align-items:center;gap:6px}
+dialog.fenetre .te-piece select{font:inherit;font-size:16px;color:var(--ink);border:1.5px solid var(--line);background:var(--surface);border-radius:8px;padding:3px 6px;max-width:190px}
 .ligne-t{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 8px;padding:10px 0;border-top:1px solid var(--line)}
 .ligne-t .champs{display:flex;gap:8px;flex-wrap:wrap;min-width:0}
 .ligne-t select,.ligne-t input{font:inherit;color:var(--ink);border:1.5px solid var(--line);background:var(--bg);border-radius:9px;padding:7px 9px;min-width:0}
@@ -574,45 +596,69 @@ function renderMenage(m){
 
 // ---------- Modifier le planning du ménage ----------
 const dlgMenage = $('#dlgMenage');
+const COULEURS_PIECES = ['#2f6fd0', '#d0612f', '#8a4fd0', '#17907f', '#b8860b', '#c8487f', '#4f8a2a', '#5a6680'];
+const couleurPiece = id => COULEURS_PIECES[Math.max(0, (menage?.plan.pieces || []).findIndex(p => p.id === id)) % COULEURS_PIECES.length];
+const JOURS_COURTS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+const resumeJours = js => !js.length ? 'Aucun jour choisi' : js.length === 7 ? 'Tous les jours'
+  : [...js].sort((a, b) => a - b).map(n => JOURS_COURTS[n]).join(' · ') + ` (${js.length} fois par semaine)`;
 function ouvrirEditeur(){
   if (!menage) return;
   let brouillon = menage.taches.map(t => ({...t, jours:[...t.jours]}));
   const pieces = menage.plan.pieces;
   const dessiner = () => {
     const defile = $('#edCorps')?.scrollTop || 0;  // garder la position après une suppression
-    $('#editeur').innerHTML = `<div class="f-tete"><h2 id="h-edit">Planning du ménage</h2><button class="btn ghost small" type="button" id="edAjout">Ajouter une tâche</button></div>
+    const groupes = pieces.map(p => [p, brouillon.map((x, i) => [x, i]).filter(([x]) => x.piece === p.id)]);
+    let numero = 0;
+    const carte = ([x, i]) => `<div class="tache-ed" data-i="${i}" style="--c:${couleurPiece(x.piece)}">
+        <div class="te-haut"><span class="te-num" aria-hidden="true">${++numero}</span>
+          <input class="te-titre" aria-label="Nom de la tâche" value="${esc(x.titre)}" placeholder="Ex. Aspirateur" maxlength="80">
+          <button type="button" class="te-suppr" aria-label="Supprimer cette tâche">Supprimer</button></div>
+        <div class="jours" role="group" aria-label="Jours">${NOMS_JOURS.map((j, n) => `<button type="button" data-n="${n}" aria-pressed="${x.jours.includes(n)}" aria-label="${JOURS_LONGS[n]}">${j}</button>`).join('')}</div>
+        <div class="te-bas"><span class="te-resume">${resumeJours(x.jours)}</span>
+          <label class="te-piece">Pièce <select aria-label="Pièce">${pieces.map(p => `<option value="${p.id}"${p.id === x.piece ? ' selected' : ''}>${esc(p.nom)}</option>`).join('')}</select></label></div>
+      </div>`;
+    $('#editeur').innerHTML = `<div class="f-tete"><h2 id="h-edit">Planning du ménage</h2><span class="hint">${brouillon.length} tâche${brouillon.length > 1 ? 's' : ''}</span></div>
       <div class="f-corps" id="edCorps">
-      <p class="hint">Choisissez la pièce, le nom de la tâche et les jours où elle revient.</p>
-      <div id="edListe">${brouillon.map((t, i) => `<div class="ligne-t" data-i="${i}">
-        <div class="champs"><select aria-label="Pièce">${pieces.map(p => `<option value="${p.id}"${p.id===t.piece?' selected':''}>${esc(p.nom)}</option>`).join('')}</select>
-        <input aria-label="Tâche" value="${esc(t.titre)}" placeholder="Ex. Aspirateur" maxlength="80"></div>
-        <button type="button" class="suppr" aria-label="Supprimer la tâche">×</button>
-        <div class="jours">${NOMS_JOURS.map((j, n) => `<button type="button" data-n="${n}" aria-pressed="${t.jours.includes(n)}" aria-label="${JOURS_LONGS[n]}">${j}</button>`).join('')}</div>
-      </div>`).join('')}</div>
+      <p class="hint editeur-aide">Pour chaque pièce : le nom de la tâche et les jours où elle revient.</p>
+      <div id="edListe">${groupes.map(([p, ts]) => `<section class="piece-ed" style="--c:${couleurPiece(p.id)}">
+        <div class="pe-tete"><span class="pastille" aria-hidden="true"></span><h3>${esc(p.nom)}</h3>
+          <span class="nb">${ts.length ? ts.length + ' tâche' + (ts.length > 1 ? 's' : '') : ''}</span>
+          <button class="btn ghost small" type="button" data-ajout="${p.id}" aria-label="Ajouter une tâche : ${esc(p.nom)}">+ Ajouter</button></div>
+        ${ts.length ? ts.map(carte).join('') : '<p class="pe-vide">Aucune tâche dans cette pièce.</p>'}
+      </section>`).join('')}</div>
       </div>
       <div class="f-pied"><span class="hint" id="edMsg"></span><div class="row"><button class="btn ghost" type="button" id="edAnnuler">Annuler</button><button class="btn" type="button" id="edOk">Enregistrer</button></div></div>`;
     $('#edCorps').scrollTop = defile;
-    const lire = () => $('#edListe').querySelectorAll('.ligne-t').forEach(l => {
-      const t = brouillon[+l.dataset.i]; t.piece = l.querySelector('select').value; t.titre = l.querySelector('input').value;
+    const lire = () => $('#edListe').querySelectorAll('.tache-ed').forEach(l => {
+      const x = brouillon[+l.dataset.i]; x.piece = l.querySelector('select').value; x.titre = l.querySelector('.te-titre').value;
     });
-    $('#edListe').querySelectorAll('.ligne-t').forEach(l => {
-      const t = brouillon[+l.dataset.i];
+    $('#edListe').querySelectorAll('.tache-ed').forEach(l => {
+      const x = brouillon[+l.dataset.i];
       l.querySelectorAll('.jours button').forEach(b => b.onclick = () => {
-        const n = +b.dataset.n; t.jours = t.jours.includes(n) ? t.jours.filter(x => x !== n) : [...t.jours, n];
-        b.setAttribute('aria-pressed', String(t.jours.includes(n)));
+        const n = +b.dataset.n; x.jours = x.jours.includes(n) ? x.jours.filter(y => y !== n) : [...x.jours, n];
+        b.setAttribute('aria-pressed', String(x.jours.includes(n)));
+        l.querySelector('.te-resume').textContent = resumeJours(x.jours);
+        l.classList.toggle('manque', l.classList.contains('manque') && !(x.jours.length && l.querySelector('.te-titre').value.trim()));
       });
-      l.querySelector('.suppr').onclick = () => { lire(); brouillon.splice(+l.dataset.i, 1); dessiner(); };
+      l.querySelector('.te-titre').oninput = e => { if (e.target.value.trim() && x.jours.length) l.classList.remove('manque'); };
+      l.querySelector('select').onchange = () => { lire(); dessiner(); };  // la tâche change de pièce
+      l.querySelector('.te-suppr').onclick = () => { lire(); brouillon.splice(+l.dataset.i, 1); dessiner(); };
     });
-    $('#edAjout').onclick = () => {
-      lire(); brouillon.push({id:'', piece: pieceChoisie || pieces[0].id, titre:'', jours:[jourSemaine(jourChoisi || jourCle(new Date()))]}); dessiner();
-      const nouvelle = $('#edListe').lastElementChild;
-      if (nouvelle){ $('#edCorps').scrollTop = $('#edCorps').scrollHeight; nouvelle.querySelector('input').focus({preventScroll:true}); }
+    const ajouter = piece => {
+      lire(); brouillon.push({id:'', piece, titre:'', jours:[jourSemaine(jourChoisi || jourCle(new Date()))]}); dessiner();
+      const nouvelle = $(`#edListe .tache-ed[data-i="${brouillon.length - 1}"]`);
+      if (nouvelle){ nouvelle.scrollIntoView({block:'nearest'}); nouvelle.querySelector('.te-titre').focus({preventScroll:true}); }
     };
+    $('#edListe').querySelectorAll('[data-ajout]').forEach(b => b.onclick = () => ajouter(b.dataset.ajout));
     $('#edAnnuler').onclick = () => dlgMenage.close();
     $('#edOk').onclick = async () => {
       lire();
       const incompletes = brouillon.filter(t => !t.titre.trim() || !t.jours.length).length;
-      if (incompletes){ $('#edMsg').className = 'err'; $('#edMsg').textContent = `${incompletes} tâche${incompletes>1?'s':''} sans nom ou sans jour : complétez ou supprimez-les.`; return; }
+      if (incompletes){
+        $('#edListe').querySelectorAll('.tache-ed').forEach(l => { const x = brouillon[+l.dataset.i]; l.classList.toggle('manque', !x.titre.trim() || !x.jours.length); });
+        $('#edListe .manque')?.scrollIntoView({block:'nearest'});
+        $('#edMsg').className = 'err'; $('#edMsg').textContent = `${incompletes} tâche${incompletes>1?'s':''} sans nom ou sans jour (en rouge) : complétez ou supprimez-les.`; return;
+      }
       $('#edMsg').className = 'hint dots'; $('#edMsg').textContent = 'Enregistrement';
       try {
         const r = await fetch('api/menage/taches', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({taches: brouillon, version: menage.version})});

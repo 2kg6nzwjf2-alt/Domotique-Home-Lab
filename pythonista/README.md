@@ -58,7 +58,7 @@ Pour voir l'agenda Google sans adresse iCal : sur l'iPhone, **Réglages > Apps >
 2. Ajoutez l'action **Ouvrir les URL** avec l'adresse : `pythonista3://Maison/Maison.py?action=run&root=icloud`
 3. Nommez le raccourci « Maison », puis **Partager > Sur l'écran d'accueil**.
 
-Pour fermer l'appli, touchez la croix en haut à gauche.
+Pour fermer l'appli, touchez la croix ronde en haut à gauche de la page, ou glissez vers le bas avec deux doigts.
 
 ## Limites
 

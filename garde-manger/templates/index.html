@@ -14,7 +14,7 @@
 <link rel="icon" type="image/png" href="static/icone-192.png">
 <title>Garde-manger</title>
 <style>
-:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+:root{color-scheme:light;padding-top:max(env(safe-area-inset-top,0px),var(--marge-ios,0px));padding-bottom:env(safe-area-inset-bottom,0px)}
 body{margin:0;font:14px/1.4 -apple-system,system-ui,sans-serif}
 img{max-width:100%}
 [hidden]{display:none!important}
@@ -412,6 +412,7 @@ form.add{position:relative}
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script>window.GM = /*__GARDE_MANGER__*/null;
+if (window.GM && GM.marge) document.documentElement.style.setProperty('--marge-ios', GM.marge + 'px');  // barre d'état (Pythonista)
 if (window.GM && GM.retour) document.addEventListener('DOMContentLoaded', () => { const a = document.getElementById('retour'); a.href = GM.retour; a.hidden = false; });
 // Ce soir, d'après l'agenda : repas dehors ou soirée chargée
 if (window.GM && GM.soiree) document.addEventListener('DOMContentLoaded', () => {

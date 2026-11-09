@@ -1,6 +1,6 @@
 """Programme de l'appli Maison dans Pythonista (iPhone ou iPad), lancé par « Maison.py ».
 
-Pour la fermer : touchez la croix en haut à gauche.
+Pour la fermer : touchez la croix en haut à gauche de la page (ou glissez vers le bas avec deux doigts).
 Sur un ordinateur, `python pythonista/lancer.py` lance une version de démonstration dans le navigateur.
 """
 
@@ -128,6 +128,22 @@ def sans_rebond(vue):
         print("Effet élastique non désactivé :", e)
 
 
+def hauteur_barre_etat():
+    """Hauteur de la barre d'état (heure, batterie), que la page laisse libre sans barre de titre."""
+    try:
+        from objc_util import ObjCClass, on_main_thread
+
+        @on_main_thread
+        def mesurer():
+            fenetres = ObjCClass("UIApplication").sharedApplication().windows()
+            hauteurs = [float(f.safeAreaInsets().top) for f in fenetres] if fenetres else []
+            return max(hauteurs + [float(ObjCClass("UIApplication").sharedApplication().statusBarFrame().size.height)])
+        return int(round(mesurer()))
+    except Exception as e:
+        print("Hauteur de la barre d'état inconnue :", e)
+        return 20
+
+
 def creer_appli():
     if ui is not None:
         try:
@@ -190,8 +206,16 @@ def main():
     vue = ui.WebView(frame=fenetre.bounds, flex="WH")
     vue.background_color = "#f3f5f9"
     fenetre.add_subview(vue)
+    # Pas de barre de titre de Pythonista (bandeau blanc, même la nuit) : la page a sa propre croix,
+    # qui appelle appli.fermer (glisser vers le bas avec deux doigts ferme aussi la fenêtre).
+    # Croix et hauteur de la barre d'état sont prêtes avant le chargement de la page, qui les utilise.
+    def fermer():
+        fenetre.close()
+        fini.set()
+    appli.fermer = lambda: ui.delay(fermer, 0.1)
+    appli.marge_haut = hauteur_barre_etat()
     vue.load_url(adresse)
-    fenetre.present("fullscreen")
+    fenetre.present("fullscreen", hide_title_bar=True)
     sans_rebond(vue)
     try:
         while not fini.wait(0.5):

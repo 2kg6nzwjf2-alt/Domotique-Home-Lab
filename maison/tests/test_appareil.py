@@ -392,3 +392,13 @@ def test_mode_cadre_garde_l_ecran_allume(tmp_path):
     assert ecran.etats[-1] is True and a.reglages_publics()["cadre"] == "1"
     a.enregistrer_reglages({"cadre": ""})
     assert ecran.etats[-1] is False
+
+
+def test_croix_de_fermeture(appli):
+    a, c, _, _ = appli
+    assert injecte(c.appel("GET", "/")[1], "MAISON")["fermer"] is False
+    assert c.json("POST", "/api/fermer", {})[0] == 404
+    fermes = []
+    a.fermer = lambda: fermes.append(True)
+    assert injecte(c.appel("GET", "/")[1], "MAISON")["fermer"] is True
+    assert c.json("POST", "/api/fermer", {}) == (200, {"ok": True}) and fermes == [True]

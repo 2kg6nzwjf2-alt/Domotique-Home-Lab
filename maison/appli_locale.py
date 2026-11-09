@@ -54,6 +54,8 @@ class Appli:
         self.appareil, self.partage = appareil, partage
         self.icloud, self.dossier_donnees = icloud, dossier_donnees
         self.ecran = ecran  # objet avec garder_allume(bool) : mode cadre
+        self.fermer = None  # fonction qui ferme l'appli (Pythonista) : croix de la page
+        self.marge_haut = 0  # hauteur de la barre d'état quand la barre de titre de Pythonista est masquée
         rafraichir = icloud.rafraichir if icloud is not None else None
         self.etat_gm = Stockage(os.path.join(dossier_donnees, "garde-manger", "etat.json"), rafraichir, appareil)
         self.menage = Menage(os.path.join(dossier_donnees, "menage.json"), avant_lecture=rafraichir, appareil=appareil)
@@ -220,6 +222,8 @@ class Appli:
             "meteo": self._meteo is not None,
             "reglages": r,
             "synchro": {"partage": self.partage, "appareil": self.appareil},
+            "fermer": self.fermer is not None,
+            "marge": self.marge_haut,
         }
         return self.page_maison.replace(MARQUEUR_MAISON, _json_page(injecte))
 
@@ -227,7 +231,7 @@ class Appli:
         version, etat = self.etat_gm.lire()
         injecte = {"donnees": donnees_gm.pour_interface(), "etat": etat, "version": version, "claude": False,
                    "retour": "../", "rappels": True, "soiree": self.soiree(),
-                   "codes": True, "scanner": self.scanner is not None}
+                   "codes": True, "scanner": self.scanner is not None, "marge": self.marge_haut}
         return self.page_gm.replace(MARQUEUR_GM, _json_page(injecte))
 
 
@@ -355,6 +359,11 @@ class Gestionnaire(BaseHTTPRequestHandler):
                 return self._envoyer(200, {"ok": bool(a.rappels.terminer(str(corps.get("id") or "")))})
             if chemin == "/api/reglages":
                 return self._envoyer(200, a.enregistrer_reglages(corps))
+            if chemin == "/api/fermer":
+                if a.fermer is None:
+                    return self._envoyer(404, {"code": "introuvable"})
+                a.fermer()
+                return self._envoyer(200, {"ok": True})
             if chemin == "/api/synchro":
                 return self._envoyer(200, a.synchro(forcer=True))
             if chemin == "/api/menage/cocher":

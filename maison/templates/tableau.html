@@ -38,7 +38,7 @@
   --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.25); color-scheme:dark}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
-html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);background:var(--bg)}
+html{padding-top:max(env(safe-area-inset-top,0px),var(--marge-ios,0px));padding-bottom:env(safe-area-inset-bottom,0px);background:var(--bg)}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body);
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
 button,input{font:inherit;color:inherit}
@@ -53,6 +53,10 @@ a{color:var(--accent)}
 .clock{font-family:var(--f-mono);font-size:clamp(30px,6vw,44px);font-weight:500;font-variant-numeric:tabular-nums;line-height:1}
 .maj{font-size:12.5px;color:var(--muted);text-align:right;margin-top:4px}
 #cadreBtn{margin-top:8px;float:right}
+.fermer-appli{position:absolute;top:calc(max(env(safe-area-inset-top,0px),var(--marge-ios,0px)) + 8px);left:max(10px,env(safe-area-inset-left,0px));width:38px;height:38px;border-radius:50%;border:0;
+  background:var(--surface);color:var(--muted);font-size:22px;line-height:1;box-shadow:var(--shadow);z-index:5}
+body.avec-fermer .wrap{padding-top:36px}
+body.cadre .fermer-appli{opacity:.45}
 /* Mode cadre : l'iPad posé dans la maison, écran toujours allumé, grand texte, sombre la nuit */
 body.cadre{font-size:17px}
 body.cadre .top h1{font-size:clamp(24px,3vw,30px)}
@@ -301,6 +305,7 @@ ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;m
 </head>
 <body>
 <script>window.MAISON = /*__MAISON__*/null;</script>
+<button class="fermer-appli" type="button" id="fermerAppli" aria-label="Fermer l’appli Maison" hidden>×</button>
 <div class="wrap">
   <header class="top">
     <div>
@@ -388,6 +393,8 @@ ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;m
 <script>
 (() => {
 const M = window.MAISON || {};
+// Pythonista sans barre de titre : hauteur de la barre d'état (heure, batterie) mesurée par l'appli
+if (M.marge) document.documentElement.style.setProperty('--marge-ios', M.marge + 'px');
 const $ = s => document.querySelector(s);
 const APPAREIL = M.mode === 'appareil';
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1005,6 +1012,12 @@ $('#meteo').addEventListener('click', e => { if (pasUnControle(e)) ouvrirMeteo()
 $('#agenda').addEventListener('click', e => { if (pasUnControle(e)) ouvrirAgenda(); });
 
 let enCours = false, dernier = null;  // dernières données du tableau (aussi lues par le mode cadre)
+
+// ---------- Croix de fermeture (Pythonista : la barre de titre est masquée) ----------
+if (APPAREIL && M.fermer){
+  $('#fermerAppli').hidden = false; document.body.classList.add('avec-fermer');
+  $('#fermerAppli').onclick = () => fetch('api/fermer', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'}).catch(() => {});
+}
 
 // ---------- Mode cadre ----------
 // Activé sur cet appareil : dans Pythonista, réglage enregistré (et écran gardé allumé par l'appli) ;

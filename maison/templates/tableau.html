@@ -103,11 +103,10 @@ button.dot:hover{border-color:var(--ok);background:var(--ok-soft)}
 .case{width:22px;height:22px;border-radius:7px;border:1.5px solid var(--line);background:var(--surface);flex:none;display:grid;place-items:center;padding:0;color:var(--accent-ink);font-size:14px;line-height:1}
 .fait .case{background:var(--ok);border-color:var(--ok)}
 /* Fenêtres (planning du ménage, météo et agenda de la semaine) : en-tête et pied fixes, milieu qui défile.
-   Hauteur et position suivent la partie visible de l'écran (--vvh, --vvtop), pour rester au-dessus du clavier de l'iPhone. */
+   Hauteur limitée à la partie visible de l'écran (--vvh), pour rester au-dessus du clavier. */
 dialog.fenetre{border:0;border-radius:16px;padding:0;background:var(--surface);color:var(--ink);width:min(720px,calc(100vw - 24px));
-  position:fixed;inset:auto 0;top:calc(var(--vvtop,0px) + 12px);margin:0 auto;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.35);
-  max-height:calc(100vh - 24px);max-height:calc(var(--vvh,100dvh) - 24px)}
-@media (min-height:700px){dialog.fenetre{top:calc(var(--vvtop,0px) + 4vh);max-height:calc(var(--vvh,100dvh) - 8vh)}}
+  position:fixed;inset:auto 0;top:16px;margin:0 auto;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.35);
+  max-height:calc(100vh - 32px);max-height:calc(var(--vvh,100dvh) - 32px)}
 dialog.fenetre[open]{display:flex;flex-direction:column}
 dialog.fenetre::backdrop{background:rgba(10,16,30,.5)}
 body:has(dialog.fenetre[open]){overflow:hidden}
@@ -820,20 +819,23 @@ function renderSynchro(s){
 
 // ---------- Fenêtres : place laissée par le clavier de l'iPhone ----------
 const vue = window.visualViewport;
+// Seule la hauteur suit le clavier, et seulement quand il s'ouvre ou se ferme (écart de plus de 80 px) :
+// suivre chaque étape de l'animation, ou la position de la partie visible, faisait bouger les fenêtres (iPad).
+let hauteurVue = 0;
 function ajusterFenetres(){
   if (!vue) return;
-  const r = document.documentElement.style;
-  // Dans Pythonista, offsetTop suit aussi le défilement de la page : on ne s'en sert que si le clavier
-  // réduit vraiment la partie visible, et jamais au-delà de la place qu'il prend.
-  const pris = Math.max(0, window.innerHeight - vue.height);
-  r.setProperty('--vvh', vue.height + 'px');
-  r.setProperty('--vvtop', (pris > 120 ? Math.min(Math.max(vue.offsetTop, 0), pris) : 0) + 'px');
+  const h = Math.round(vue.height);
+  if (hauteurVue && Math.abs(h - hauteurVue) < 80) return;
+  hauteurVue = h;
+  document.documentElement.style.setProperty('--vvh', h + 'px');
   // clavier qui s'ouvre : le champ en cours de saisie remonte dans la partie visible
   const champ = document.activeElement;
   if (champ?.matches?.('dialog.fenetre input, dialog.fenetre select, dialog.fenetre textarea'))
-    requestAnimationFrame(() => champ.scrollIntoView({block:'nearest'}));
+    setTimeout(() => champ.scrollIntoView({block:'nearest'}), 50);
 }
-vue?.addEventListener('resize', ajusterFenetres); vue?.addEventListener('scroll', ajusterFenetres); ajusterFenetres();
+let attenteVue = null;
+vue?.addEventListener('resize', () => { clearTimeout(attenteVue); attenteVue = setTimeout(ajusterFenetres, 120); });
+ajusterFenetres();
 // le champ en cours de saisie reste visible au-dessus du clavier
 document.addEventListener('focusin', e => {
   if (e.target.matches?.('dialog.fenetre input, dialog.fenetre select, dialog.fenetre textarea'))
@@ -861,7 +863,18 @@ function figerPage(){
 const surveillance = new MutationObserver(figerPage);
 document.querySelectorAll('dialog').forEach(d => {
   surveillance.observe(d, {attributes:true, attributeFilter:['open']});
-  d.addEventListener('touchmove', e => { if (!e.target.closest('.f-corps, .heures')) e.preventDefault(); }, {passive:false});
+  // glisser hors de la zone qui défile, ou au-delà de son début ou de sa fin, ne fait rien :
+  // sinon l'iPad fait « rebondir » toute la page, fenêtre comprise
+  let depart = null;
+  d.addEventListener('touchstart', e => { depart = e.touches[0] ? {x: e.touches[0].clientX, y: e.touches[0].clientY} : null; }, {passive:true});
+  d.addEventListener('touchmove', e => {
+    const corps = e.target.closest('.f-corps'), t = e.touches[0];
+    if (!corps || !t || !depart){ e.preventDefault(); return; }
+    const dx = t.clientX - depart.x, dy = t.clientY - depart.y;
+    if (Math.abs(dx) > Math.abs(dy) && e.target.closest('.heures')) return;  // défilement des heures
+    const enHaut = corps.scrollTop <= 0, enBas = corps.scrollTop + corps.clientHeight >= corps.scrollHeight - 1;
+    if (corps.scrollHeight <= corps.clientHeight || (enHaut && dy > 0) || (enBas && dy < 0)) e.preventDefault();
+  }, {passive:false});
 });
 
 // ---------- Météo et agenda des 7 prochains jours ----------

@@ -105,6 +105,29 @@ if ui is not None:
                 self.fini.set()
 
 
+def sans_rebond(vue):
+    """Coupe l'effet élastique de la page : sur iPad, tirer au-delà du bord faisait bouger tout le contenu, fenêtres comprises."""
+    try:
+        from objc_util import ObjCClass, ObjCInstance, on_main_thread
+    except ImportError:
+        return
+
+    @on_main_thread
+    def appliquer():
+        defilantes = ObjCClass("UIScrollView")
+        pile = [ObjCInstance(vue)]
+        while pile:
+            v = pile.pop()
+            if v.isKindOfClass_(defilantes):
+                v.setBounces_(False)
+            pile.extend(list(v.subviews() or []))
+
+    try:
+        appliquer()
+    except Exception as e:
+        print("Effet élastique non désactivé :", e)
+
+
 def creer_appli():
     if ui is not None:
         try:
@@ -163,6 +186,7 @@ def main():
     fenetre.add_subview(vue)
     vue.load_url(adresse)
     fenetre.present("fullscreen")
+    sans_rebond(vue)
     try:
         while not fini.wait(0.5):
             pass

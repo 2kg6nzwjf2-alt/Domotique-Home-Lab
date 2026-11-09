@@ -260,3 +260,38 @@ def test_route_code_barres(tmp_path):
     assert r.status_code == 200 and r.get_json()["nom"] == "Vinaigre de cidre"
     assert c.get("/api/code/3564700013343").status_code == 400
     assert c.get("/api/code/3017620422003").status_code == 502
+
+
+# ---------- Synchronisation entre appareils ----------
+from stockage import EnAttenteICloud, Stockage, VersionDepassee  # noqa: E402
+
+
+def test_stockage_ne_jamais_ecraser_l_autre_appareil(tmp_path):
+    lus = []
+    iphone = Stockage(str(tmp_path / "etat.json"), avant_lecture=lus.append, appareil="iPhone")
+    ipad = Stockage(str(tmp_path / "etat.json"), appareil="iPad")
+    assert iphone.ecrire({"pantry": [1]}, base=0) == 1
+    assert ipad.ecrire({"pantry": [1, 2]}, base=1) == 2
+    with pytest.raises(VersionDepassee) as e:
+        iphone.ecrire({"pantry": []}, base=1)  # l'iPhone n'a pas vu l'ajout de l'iPad
+    assert e.value.version == 2 and iphone.lire() == (2, {"pantry": [1, 2]})
+    assert iphone.ecrire({"pantry": [3]}) == 3  # sans version : le dernier gagne (anciennes pages)
+    infos = iphone.infos()
+    assert infos["appareil"] == "iPhone" and infos["date"] and infos["en_attente"] is False
+    assert lus and all(c.endswith("etat.json") for c in lus)  # téléchargement iCloud demandé avant lecture
+
+
+def test_stockage_attend_icloud(tmp_path):
+    (tmp_path / ".etat.json.icloud").write_bytes(b"")  # fichier pas encore téléchargé sur cet appareil
+    s = Stockage(str(tmp_path / "etat.json"))
+    assert s.lire() == (0, {}) and s.infos()["en_attente"] is True
+    with pytest.raises(EnAttenteICloud):
+        s.ecrire({"pantry": []}, base=0)
+    assert not (tmp_path / "etat.json").exists()
+
+
+def test_route_etat_conflit(client):
+    assert client.put("/api/etat", json={"etat": {"a": 1}, "version": 0}).get_json()["version"] == 1
+    r = client.put("/api/etat", json={"etat": {"a": 2}, "version": 0})
+    assert r.status_code == 409 and r.get_json() == {"code": "conflit", "version": 1}
+    assert client.put("/api/etat", json={"etat": {"a": 3}, "version": 1}).status_code == 200

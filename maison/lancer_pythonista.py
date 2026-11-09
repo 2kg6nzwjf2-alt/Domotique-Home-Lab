@@ -54,12 +54,20 @@ def creer_appli():
         except Exception as e:
             print("Scan des codes-barres indisponible :", e)
             scanner = None
+        try:
+            icloud = plateforme.ICloudIOS()
+        except Exception as e:
+            print("Téléchargement iCloud indisponible :", e)
+            icloud = None
     else:
         rappels = plateforme.RappelsSimules(os.path.join(DONNEES, "rappels-demo.json"))
         agenda = plateforme.AgendaSimule()
         coffre = plateforme.CoffreFichier(os.path.join(DONNEES, "reglages-demo.json"))
-        scanner = None
-    return appli_locale.Appli(DONNEES, rappels, agenda, coffre, scanner=scanner)
+        scanner = icloud = None
+    # données partagées entre l'iPhone et l'iPad seulement si le dossier Maison est dans iCloud Drive
+    partage = "icloud" if "Mobile Documents" in os.path.abspath(DONNEES) else "appareil"
+    return appli_locale.Appli(DONNEES, rappels, agenda, coffre, scanner=scanner,
+                              icloud=icloud, appareil=plateforme.nom_appareil(), partage=partage)
 
 
 def main():

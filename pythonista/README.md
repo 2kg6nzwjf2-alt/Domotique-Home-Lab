@@ -27,6 +27,16 @@ Pour avoir la dernière version plus tard, lancez **Mettre à jour.py** : vos do
 
 **Maison.py** et **Mettre à jour.py** ne changent jamais : ils lancent le programme rangé dans les dossiers `maison` et `garde-manger`, que les mises à jour remplacent. Vous pouvez donc les laisser ouverts dans l'éditeur pendant une mise à jour.
 
+## iPhone et iPad synchronisés
+
+Le placard, les courses, les codes-barres mémorisés et le ménage sont dans le dossier **Maison** d'iCloud Drive : l'iPhone et l'iPad lisent les mêmes fichiers.
+
+- Avant chaque lecture, l'appli demande à iOS la dernière version du fichier ; Garde-manger vérifie toutes les 30 secondes si l'autre appareil a modifié le placard.
+- Si les deux appareils modifient le placard en même temps, les changements sont fusionnés : rien n'est écrasé.
+- En bas du tableau de bord, **Réglages** indique si les données sont bien dans iCloud, et sur quel appareil le placard a été modifié en dernier.
+
+Si un appareil n'a pas les mêmes données : vérifiez que **iCloud** est activé dans les réglages de Pythonista (roue dentée) et que le dossier **Maison** est rangé sous **iCloud**, pas sous « This iPhone » ou « This iPad ». Sinon, activez iCloud, supprimez ce dossier Maison local, puis lancez **Mettre à jour.py** depuis le dossier Maison d'iCloud.
+
 ## Réglages
 
 En bas du tableau de bord, la section **Réglages** permet de choisir :

@@ -660,7 +660,11 @@ if (APPAREIL){
       <div style="display:flex;gap:10px;align-items:center;align-self:end;flex-wrap:wrap"><button class="btn" type="submit">Enregistrer</button><span class="hint" id="r_msg"></span></div>
     </form>
     <p class="hint">Les réglages restent sur cet appareil : sur l’iPad, saisissez-les une fois de plus. Sans adresse iCal, l’agenda lit le Calendrier de l’iPhone : ajoutez-y votre compte Google (Réglages > Apps > Calendrier > Comptes).</p>`;
-  // listes vues par Pythonista : choix de la liste de courses et diagnostic
+  // synchronisation iPhone / iPad
+  const S = M.synchro || {};
+  reg.querySelector('div').insertAdjacentHTML('beforeend', S.partage === 'appareil'
+    ? `<p class="hint"><span class="err">Synchronisation : le dossier Maison n’est pas dans iCloud, le placard et le ménage restent sur cet appareil.</span> Activez iCloud dans les réglages de Pythonista (roue dentée), puis relancez l’installation depuis le dossier Maison d’iCloud.</p>`
+    : `<p class="hint" id="r_synchro">Synchronisation : données partagées par iCloud${S.appareil ? ' (cet appareil : ' + esc(S.appareil) + ')' : ''}.</p>`);
   reg.querySelector('div').insertAdjacentHTML('beforeend', '<p class="hint" id="r_listes">Lecture des listes Rappels…</p>');
   fetch('api/rappels/listes').then(r => r.ok ? r.json() : Promise.reject(r.status)).then(d => {
     const sel = $('#r_liste'), actuelle = R.liste_courses || 'Courses';
@@ -684,6 +688,20 @@ if (APPAREIL){
   };
 }
 
+// dernière modification du placard (diagnostic de la synchronisation, dans les Réglages)
+function renderSynchro(s){
+  const el = document.getElementById('r_synchro'); const p = s && s.placard;
+  if (!el || !p) return;
+  const S = M.synchro || {};
+  let texte = 'Synchronisation : données partagées par iCloud' + (S.appareil ? ' (cet appareil : ' + esc(S.appareil) + ')' : '') + '.';
+  if (p.en_attente) texte += ' Le placard est en cours de téléchargement depuis iCloud.';
+  else if (p.date){
+    const d = new Date(p.date);
+    texte += ` Placard modifié pour la dernière fois ${p.appareil ? 'sur <b>' + esc(p.appareil) + '</b> ' : ''}le ${d.toLocaleDateString('fr-FR', {day:'numeric', month:'long'})} à ${heure(d)}.`;
+  }
+  el.innerHTML = texte;
+}
+
 // ---------- Mise à jour ----------
 let enCours = false, dernier = null;
 async function charger(){
@@ -694,7 +712,7 @@ async function charger(){
     if (!r.ok) throw new Error('HTTP ' + r.status);
     dernier = await r.json();
     renderAgenda(dernier.agenda, dernier.rappels); renderTaches(dernier.rappels); renderGm(dernier.garde_manger); renderMeteo(dernier.meteo); renderMenage(dernier.menage);
-    renderResume(dernier);
+    renderResume(dernier); renderSynchro(dernier.synchro);
     $('#maj').textContent = 'Mis à jour à ' + heure(new Date());
   } catch {
     $('#maj').textContent = 'Serveur injoignable' + (dernier ? ' : dernières données affichées' : '');

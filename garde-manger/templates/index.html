@@ -563,6 +563,33 @@ const RECIPES = GM.donnees.recettes.map(([n,t,s,kind,v,ing,steps]) => ({
 const STATIQUE = !!GM.statique, CLE_LOCALE = 'garde-manger.etat';
 const ETAT = STATIQUE ? (() => { try { const v = JSON.parse(localStorage.getItem(CLE_LOCALE) || '{}'); return v && typeof v==='object' && !Array.isArray(v) ? v : {}; } catch { return {}; } })() : (GM.etat || {});
 let etatVersion = GM.version || 0, saveTimer = null, saving = false, dirty = false;
+let rechargerApres = false;
+// Fusion à trois : base = dernier état connu du serveur, local = cet appareil, serveur = l'autre appareil.
+// Ce qui n'a pas changé ici garde la version de l'autre appareil ; les listes (placard, courses) sont fusionnées
+// élément par élément (ajouts, retraits et modifications des deux côtés), les objets (codes-barres) clé par clé.
+function fusionEtats(base, local, serveur){
+  const J = JSON.stringify, objet = v => v && typeof v === 'object' && !Array.isArray(v);
+  const res = {...serveur};
+  for (const k of new Set([...Object.keys(base), ...Object.keys(local)])){
+    const b = base[k], l = local[k], s = serveur[k];
+    if (J(l) === J(b)) continue;
+    const listes = [b, l, s].every(a => Array.isArray(a) && a.every(x => objet(x) && 'id' in x));
+    if (listes && J(s) !== J(b)){
+      const B = new Map(b.map(x => [x.id, x])), L = new Map(l.map(x => [x.id, x]));
+      const out = s.filter(x => !(B.has(x.id) && !L.has(x.id)))
+        .map(x => L.has(x.id) && J(L.get(x.id)) !== J(B.get(x.id)) ? L.get(x.id) : x);
+      for (const x of l) if (!B.has(x.id) && !out.some(y => y.id === x.id)) out.push(x);
+      res[k] = out;
+    } else if (objet(b) && objet(l) && objet(s)){
+      const o = {...s};
+      for (const c of new Set([...Object.keys(b), ...Object.keys(l)])) if (J(l[c]) !== J(b[c])){ if (l[c] === undefined) delete o[c]; else o[c] = l[c]; }
+      res[k] = o;
+    } else if (l === undefined) delete res[k];
+    else res[k] = l;
+  }
+  return res;
+}
+let dernierEnvoye = JSON.stringify(ETAT);  // rien n'est envoyé si l'état n'a pas changé (ouvrir l'appli n'écrit rien)
 const store = {
   get(k,d){ return Object.prototype.hasOwnProperty.call(ETAT, k) ? ETAT[k] : d; },
   set(k,v){ ETAT[k] = v; dirty = true; clearTimeout(saveTimer); saveTimer = setTimeout(pushState, STATIQUE ? 50 : 500); }
@@ -574,23 +601,43 @@ async function pushState(){
     return;
   }
   if (saving){ clearTimeout(saveTimer); saveTimer = setTimeout(pushState, 500); return; }
+  const texte = JSON.stringify(ETAT);
+  if (texte === dernierEnvoye){ dirty = false; return; }
   saving = true; dirty = false;
   try {
-    const r = await fetch('api/etat', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({etat: ETAT})});
+    const r = await fetch('api/etat', {method:'PUT', headers:{'Content-Type':'application/json'}, body: `{"etat":${texte},"version":${etatVersion}}`});
     if (r.status===401){ location.reload(); return; }
+    if (r.status===409){
+      // l'autre appareil a enregistré entre-temps : on fusionne ses changements avec ceux d'ici, puis on renvoie
+      try {
+        const d = await (await fetch('api/etat', {cache:'no-store'})).json();
+        const fusionne = fusionEtats(JSON.parse(dernierEnvoye), JSON.parse(texte), d.etat || {});
+        Object.keys(ETAT).forEach(k => delete ETAT[k]); Object.assign(ETAT, fusionne);
+        etatVersion = d.version; dernierEnvoye = JSON.stringify(d.etat || {}); rechargerApres = true; dirty = true;
+        clearTimeout(saveTimer); saveTimer = setTimeout(pushState, 0);
+      } catch { location.reload(); }
+      return;
+    }
+    if (r.status===503){
+      dirty = true; toast('Le placard arrive d’iCloud : enregistrement dans un instant.');
+      clearTimeout(saveTimer); saveTimer = setTimeout(pushState, 4000); return;
+    }
     if (!r.ok) throw new Error('HTTP '+r.status);
-    etatVersion = (await r.json()).version;
+    etatVersion = (await r.json()).version; dernierEnvoye = texte;
+    if (rechargerApres){ toast('Placard fusionné avec les changements de l’autre appareil'); setTimeout(() => location.reload(), 1200); }
   } catch {
     dirty = true;
     toast('Pas de connexion au serveur : modification pas encore enregistrée');
     clearTimeout(saveTimer); saveTimer = setTimeout(pushState, 5000);
   } finally { saving = false; }
 }
-// Retour sur l'appli : si un autre appareil a modifié le placard, on recharge.
-document.addEventListener('visibilitychange', async () => {
-  if (STATIQUE || document.visibilityState!=='visible' || dirty || saving) return;
-  try { const r = await fetch('api/etat/version'); if (r.ok && (await r.json()).version > etatVersion) location.reload(); } catch {}
-});
+// Si un autre appareil a modifié le placard, on recharge : au retour sur l'appli et toutes les 30 secondes.
+async function verifierAutreAppareil(){
+  if (STATIQUE || document.visibilityState!=='visible' || dirty || saving || document.querySelector('dialog[open]')) return;  // pas pendant une recette ou une fenêtre ouverte
+  try { const r = await fetch('api/etat/version', {cache:'no-store'}); if (r.ok && (await r.json()).version > etatVersion && !dirty && !saving) location.reload(); } catch {}
+}
+document.addEventListener('visibilitychange', verifierAutreAppareil);
+if (!STATIQUE) setInterval(verifierAutreAppareil, 30000);
 const EXAMPLE = [['oeuf',6,'pc'],['lait',1,'l'],['beurre',250,'g'],['farine',1,'kg'],['pomme-de-terre',1.5,'kg'],['oignon',3,'pc'],['pates',500,'g'],['tomates-concassees',1,'boite'],['fromage-rape',200,'g'],['lardons',100,'g'],['carotte',4,'pc'],['courgette',2,'pc']];
 let pantry = store.get('pantry', null);
 let isExample = false;

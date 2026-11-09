@@ -66,13 +66,19 @@ def _date(texte):
 
 
 class Menage:
-    def __init__(self, chemin, plan=None):
+    def __init__(self, chemin, plan=None, avant_lecture=None):
         self.chemin = chemin
+        self.avant_lecture = avant_lecture  # version Pythonista : téléchargement depuis iCloud
         self.plan = plan or PLAN
         self._pieces = {p["id"] for p in self.plan["pieces"]}
         self._verrou = threading.Lock()
 
     def _lire(self):
+        if self.avant_lecture is not None:
+            try:
+                self.avant_lecture(self.chemin)
+            except Exception:
+                pass
         try:
             with open(self.chemin, encoding="utf-8") as f:
                 d = json.load(f)
@@ -84,7 +90,10 @@ class Menage:
         return {"taches": _taches_defaut(), "fait": {}}
 
     def _ecrire(self, d):
-        dossier = os.path.dirname(os.path.abspath(self.chemin))
+        dossier, nom = os.path.split(os.path.abspath(self.chemin))
+        if not os.path.exists(self.chemin) and os.path.exists(os.path.join(dossier, f".{nom}.icloud")):
+            # pas encore téléchargé depuis iCloud : écrire effacerait le planning de l'autre appareil
+            raise ValueError("Le ménage arrive d'iCloud : réessayez dans un instant.")
         os.makedirs(dossier, exist_ok=True)
         fd, temporaire = tempfile.mkstemp(dir=dossier, prefix=".menage-", suffix=".json")
         with os.fdopen(fd, "w", encoding="utf-8") as f:

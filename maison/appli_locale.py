@@ -27,7 +27,7 @@ from plateforme import ListeIntrouvable  # noqa: E402
 from plateforme import _cle_liste as plateforme_cle_liste  # noqa: E402
 from menage import Menage  # noqa: E402
 from meteo import ErreurMeteo, Meteo  # noqa: E402
-from stockage import EtatTropGros, Stockage  # noqa: E402  (garde-manger/stockage.py)
+from stockage import EnAttenteICloud, EtatTropGros, Stockage, VersionDepassee  # noqa: E402  (garde-manger/stockage.py)
 from codes_barres import ErreurCode, OpenFoodFacts, code_valide  # noqa: E402  (garde-manger/codes_barres.py)
 
 MARQUEUR_MAISON = "/*__MAISON__*/null"
@@ -43,11 +43,16 @@ def _json_page(valeur):
 class Appli:
     """Toute la logique de l'appli, indépendante du serveur HTTP (facile à tester)."""
 
-    def __init__(self, dossier_donnees, rappels, agenda_appareil, coffre, scanner=None, off=None):
+    def __init__(self, dossier_donnees, rappels, agenda_appareil, coffre, scanner=None, off=None,
+                 icloud=None, appareil=None, partage=None):
+        """`icloud` : objet avec `rafraichir(chemin)` (téléchargement depuis iCloud avant lecture).
+        `partage` : "icloud" si les données sont dans iCloud Drive, "appareil" sinon (affiché dans les Réglages)."""
         self.rappels, self.agenda_appareil, self.coffre = rappels, agenda_appareil, coffre
         self.scanner, self.fiches = scanner, off or OpenFoodFacts()
-        self.etat_gm = Stockage(os.path.join(dossier_donnees, "garde-manger", "etat.json"))
-        self.menage = Menage(os.path.join(dossier_donnees, "menage.json"))
+        self.appareil, self.partage = appareil, partage
+        rafraichir = icloud.rafraichir if icloud is not None else None
+        self.etat_gm = Stockage(os.path.join(dossier_donnees, "garde-manger", "etat.json"), rafraichir, appareil)
+        self.menage = Menage(os.path.join(dossier_donnees, "menage.json"), avant_lecture=rafraichir)
         with open(os.path.join(ICI, "templates", "tableau.html"), encoding="utf-8") as f:
             self.page_maison = f.read()
         with open(os.path.join(DOSSIER_GM, "templates", "index.html"), encoding="utf-8") as f:
@@ -119,6 +124,8 @@ class Appli:
             except ErreurMeteo as e:
                 resultat["meteo"] = {"erreur": str(e)}
         resultat["menage"] = self.menage.lire()
+        infos = self.etat_gm.infos()
+        resultat["synchro"] = {"placard": {k: infos[k] for k in ("appareil", "date", "en_attente")}}
         _, etat = self.etat_gm.lire()
         courses = etat.get("courses") if isinstance(etat.get("courses"), list) else []
         placard = etat.get("pantry") if isinstance(etat.get("pantry"), list) else []
@@ -165,6 +172,7 @@ class Appli:
             "cocher": True,
             "meteo": self._meteo is not None,
             "reglages": r,
+            "synchro": {"partage": self.partage, "appareil": self.appareil},
         }
         return self.page_maison.replace(MARQUEUR_MAISON, _json_page(injecte))
 
@@ -267,7 +275,13 @@ class Gestionnaire(BaseHTTPRequestHandler):
             corps = self._corps()
             if not isinstance(corps.get("etat"), dict):
                 raise ValueError("état manquant")
-            return self._envoyer(200, {"version": self.appli.etat_gm.ecrire(corps["etat"])})
+            base = corps.get("version")
+            base = base if isinstance(base, int) and not isinstance(base, bool) else None
+            return self._envoyer(200, {"version": self.appli.etat_gm.ecrire(corps["etat"], base)})
+        except VersionDepassee as e:
+            return self._envoyer(409, {"code": "conflit", "version": e.version})
+        except EnAttenteICloud as e:
+            return self._envoyer(503, {"code": "attente", "message": str(e)})
         except EtatTropGros:
             return self._envoyer(413, {"code": "bad_request", "message": "état trop volumineux"})
         except ValueError as e:

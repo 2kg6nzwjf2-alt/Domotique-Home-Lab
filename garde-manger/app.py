@@ -17,7 +17,7 @@ from flask import Flask, Response, jsonify, redirect, request, send_from_directo
 import donnees
 from codes_barres import ErreurCode, OpenFoodFacts
 from service_claude import ErreurClaude, ServiceClaude
-from stockage import EtatTropGros, Stockage
+from stockage import EnAttenteICloud, EtatTropGros, Stockage, VersionDepassee
 
 DOSSIER = os.path.dirname(os.path.abspath(__file__))
 MARQUEUR = "/*__GARDE_MANGER__*/null"
@@ -151,10 +151,15 @@ def create_app(dossier_donnees=None, mot_de_passe=None, claude="environnement", 
         corps = request.get_json(silent=True)
         if not isinstance(corps, dict) or not isinstance(corps.get("etat"), dict):
             return jsonify(code="bad_request", message="état manquant"), 400
+        base = corps.get("version")
         try:
-            version = stockage.ecrire(corps["etat"])
+            version = stockage.ecrire(corps["etat"], base if isinstance(base, int) and not isinstance(base, bool) else None)
         except EtatTropGros:
             return jsonify(code="bad_request", message="état trop volumineux"), 413
+        except VersionDepassee as e:
+            return jsonify(code="conflit", version=e.version), 409
+        except EnAttenteICloud as e:
+            return jsonify(code="attente", message=str(e)), 503
         return jsonify(version=version)
 
     # ---------- Claude ----------

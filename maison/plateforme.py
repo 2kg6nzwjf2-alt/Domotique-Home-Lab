@@ -8,6 +8,7 @@ Chaque source a deux versions :
 import json
 import os
 import threading
+import time
 import unicodedata
 from datetime import date, datetime, timedelta
 
@@ -319,6 +320,62 @@ class ScannerIOS:
         if not codes:
             raise ValueError("Aucun code-barres lu sur la photo : rapprochez-vous et évitez les reflets.")
         return codes[0][1]
+
+
+# ---------------------------------------------------------------- iCloud Drive
+
+class ICloudIOS:
+    """Demande à iOS la dernière version d'un fichier iCloud avant de le lire.
+
+    Sans cela, l'iPad peut lire une ancienne copie du placard, ou rien du tout si le fichier
+    n'est encore qu'un « .etat.json.icloud » (pas téléchargé).
+    """
+
+    CLE = "NSURLUbiquitousItemDownloadingStatusKey"
+    A_JOUR = "NSURLUbiquitousItemDownloadingStatusCurrent"
+
+    def __init__(self):
+        from objc_util import ObjCClass
+        self._gestionnaire = ObjCClass("NSFileManager").defaultManager()
+        self._URL = ObjCClass("NSURL")
+        self._derniers = {}
+        self._verrou = threading.Lock()
+
+    def _statut(self, chemin):
+        from objc_util import ns
+        valeurs = self._URL.fileURLWithPath_(chemin).resourceValuesForKeys_error_(ns([self.CLE]), None)
+        valeur = valeurs.objectForKey_(self.CLE) if valeurs else None
+        return str(valeur) if valeur else None
+
+    def rafraichir(self, chemin, attente=6.0):
+        with self._verrou:
+            maintenant = time.monotonic()
+            if maintenant - self._derniers.get(chemin, -60) < 3:  # pas plus d'une demande toutes les 3 secondes
+                return
+            self._derniers[chemin] = maintenant
+        self._gestionnaire.startDownloadingUbiquitousItemAtURL_error_(self._URL.fileURLWithPath_(chemin), None)
+        dossier, nom = os.path.split(chemin)
+        fantome = os.path.join(dossier, f".{nom}.icloud")
+        # fichier pas encore téléchargé : on attend jusqu'à `attente` secondes ; copie un peu ancienne : 1,5 seconde au plus
+        fin = time.monotonic() + (attente if os.path.exists(fantome) else 1.5)
+        while time.monotonic() < fin:
+            if os.path.exists(fantome) and not os.path.exists(chemin):
+                time.sleep(0.25)
+                continue
+            statut = self._statut(chemin)
+            if statut is None or statut == self.A_JOUR:
+                return
+            time.sleep(0.25)
+
+
+def nom_appareil():
+    """« iPhone » ou « iPad » (nom affiché dans les Réglages pour savoir qui a modifié le placard)."""
+    try:
+        from objc_util import ObjCClass
+        return str(ObjCClass("UIDevice").currentDevice().model())
+    except Exception:
+        import platform
+        return platform.node() or "Ordinateur"
 
 
 # ---------------------------------------------------------------- Réglages secrets

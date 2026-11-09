@@ -289,3 +289,38 @@ def test_sans_scanner(appli):
     _, c, _, _ = appli
     assert injecte(c.appel("GET", "/garde-manger/")[1], "GM")["scanner"] is False
     assert c.json("POST", "/garde-manger/api/scanner", {})[0] == 404
+
+
+# ---------- Synchronisation iPhone / iPad ----------
+class FauxICloud:
+    def __init__(self):
+        self.demandes = []
+
+    def rafraichir(self, chemin):
+        self.demandes.append(os.path.basename(chemin))
+
+
+def test_synchronisation_entre_appareils(tmp_path):
+    icloud = FauxICloud()
+    coffre = plateforme.CoffreFichier(str(tmp_path / "coffre.json"))
+    a = appli_locale.Appli(str(tmp_path / "d"), plateforme.RappelsSimules(str(tmp_path / "r.json")), None, coffre,
+                           icloud=icloud, appareil="iPad", partage="icloud")
+    serveur, adresse = appli_locale.demarrer(a)
+    try:
+        c = Client(adresse)
+        assert injecte(c.appel("GET", "/")[1], "MAISON")["synchro"] == {"partage": "icloud", "appareil": "iPad"}
+        assert c.json("PUT", "/garde-manger/api/etat", {"etat": {"pantry": []}, "version": 0})[1]["version"] == 1
+        assert c.json("PUT", "/garde-manger/api/etat", {"etat": {"pantry": [1]}, "version": 0}) == (409, {"code": "conflit", "version": 1})
+        placard = c.json("GET", "/api/tableau")[1]["synchro"]["placard"]
+        assert placard["appareil"] == "iPad" and placard["date"] and placard["en_attente"] is False
+        assert "etat.json" in icloud.demandes and "menage.json" in icloud.demandes
+        # fichier pas encore descendu d'iCloud : rien n'est écrasé
+        os.remove(tmp_path / "d" / "garde-manger" / "etat.json")
+        (tmp_path / "d" / "garde-manger" / ".etat.json.icloud").write_bytes(b"")
+        assert c.json("PUT", "/garde-manger/api/etat", {"etat": {"pantry": []}, "version": 0})[0] == 503
+        (tmp_path / "d" / ".menage.json.icloud").write_bytes(b"")
+        t = c.json("GET", "/api/tableau")[1]["menage"]["taches"][0]["id"]
+        assert c.json("POST", "/api/menage/cocher", {"tache": t, "date": "2026-11-09"})[0] == 400
+        assert not (tmp_path / "d" / "menage.json").exists()
+    finally:
+        serveur.shutdown()

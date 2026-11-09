@@ -1,4 +1,4 @@
-"""Météo d'aujourd'hui et de demain, par Open-Meteo (gratuit, sans clé ni compte).
+"""Météo d'aujourd'hui et de demain, et prévisions heure par heure sur 7 jours, par Open-Meteo (gratuit, sans clé ni compte).
 
 https://open-meteo.com — données utilisables gratuitement pour un usage non commercial.
 """
@@ -44,6 +44,7 @@ class Meteo:
         self.session = session or requests.Session()
         self._lieu = None
         self._cache = None
+        self._cache_semaine = None
         self._verrou = threading.Lock()
 
     @classmethod
@@ -92,3 +93,47 @@ class Meteo:
                         "maintenant": {"temperature": actuel.get("temperature_2m"), "libelle": libelle, "icone": icone}}
             self._cache = (time.monotonic(), resultat)
             return resultat
+
+    def semaine(self):
+        """Prévisions des 7 prochains jours, avec le détail heure par heure de chaque jour."""
+        with self._verrou:
+            if self._cache_semaine and time.monotonic() - self._cache_semaine[0] < DUREE_CACHE:
+                return self._cache_semaine[1]
+            lieu = self.lieu()
+            d = self._json(PREVISIONS, {
+                "latitude": lieu["lat"], "longitude": lieu["lon"], "timezone": "auto", "forecast_days": 7,
+                "wind_speed_unit": "kmh",
+                "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,"
+                         "precipitation_sum,wind_speed_10m_max,wind_gusts_10m_max,uv_index_max,sunrise,sunset",
+                "hourly": "temperature_2m,apparent_temperature,weather_code,precipitation_probability,precipitation,wind_speed_10m",
+            })
+            horaire = d.get("hourly") or {}
+            heures = {}
+            for i, moment in enumerate(horaire.get("time") or []):
+                valeur = lambda cle: _a(horaire, cle, i)  # noqa: E731
+                libelle, icone = decrire(valeur("weather_code"))
+                heures.setdefault(str(moment)[:10], []).append({
+                    "heure": str(moment)[11:16], "temperature": valeur("temperature_2m"), "ressenti": valeur("apparent_temperature"),
+                    "libelle": libelle, "icone": icone, "pluie": valeur("precipitation_probability"),
+                    "pluie_mm": valeur("precipitation"), "vent": valeur("wind_speed_10m")})
+            quotidien = d.get("daily") or {}
+            jours = []
+            for i, date in enumerate(quotidien.get("time") or []):
+                valeur = lambda cle: _a(quotidien, cle, i)  # noqa: E731
+                libelle, icone = decrire(valeur("weather_code"))
+                jours.append({"date": date, "libelle": libelle, "icone": icone,
+                              "min": valeur("temperature_2m_min"), "max": valeur("temperature_2m_max"),
+                              "pluie": valeur("precipitation_probability_max"), "pluie_mm": valeur("precipitation_sum"),
+                              "vent": valeur("wind_speed_10m_max"), "rafales": valeur("wind_gusts_10m_max"),
+                              "uv": valeur("uv_index_max"),
+                              "lever": str(valeur("sunrise") or "")[11:16], "coucher": str(valeur("sunset") or "")[11:16],
+                              "heures": heures.get(date, [])})
+            resultat = {"lieu": lieu["nom"], "jours": jours}
+            self._cache_semaine = (time.monotonic(), resultat)
+            return resultat
+
+
+def _a(series, cle, i):
+    """i-ème valeur d'une série Open-Meteo, ou None si elle manque."""
+    valeurs = series.get(cle) or []
+    return valeurs[i] if i < len(valeurs) else None

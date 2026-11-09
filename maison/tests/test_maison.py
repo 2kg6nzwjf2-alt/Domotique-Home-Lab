@@ -310,3 +310,61 @@ def test_menage_dans_le_tableau(appli):
     r = c.put("/api/menage/taches", json={"taches": [{"piece": "wc", "titre": "Toilettes", "jours": [5]}]})
     assert r.status_code == 200 and c.get("/api/tableau").get_json()["menage"]["taches"][0]["titre"] == "Toilettes"
     assert c.put("/api/menage/taches", json={"taches": "non"}).status_code == 400
+
+
+# ---------- Semaine : agenda et météo détaillée ----------
+def test_agenda_semaine():
+    a = Agenda(["https://calendar.google.com/secret/basic.ics"], session=FauxHTTP())
+    s = a.semaine(date(2026, 11, 5))
+    assert s["debut"] == "2026-11-05" and len(s["jours"]) == 7 and s["erreurs"] == []
+    assert [e["titre"] for e in s["jours"][0]["evenements"]] == ["Anniversaire de Léa", "Dentiste", "Sport"]
+    assert s["jours"][1]["jour"] == "2026-11-06" and s["jours"][1]["evenements"]  # le rendez-vous du lendemain
+
+
+def test_repartir_par_jour():
+    from liens import repartir_par_jour
+    evs = [{"titre": "Vacances", "debut": "2026-11-06", "fin": "2026-11-09", "journee": True},
+           {"titre": "Nuit blanche", "debut": "2026-11-05T22:00:00+01:00", "fin": "2026-11-06T02:00:00+01:00", "journee": False},
+           {"titre": "Hors période", "debut": "2026-12-01T10:00:00+01:00", "fin": "2026-12-01T11:00:00+01:00", "journee": False},
+           {"titre": "Abîmé", "debut": "pas une date", "journee": False}]
+    jours = repartir_par_jour(evs, date(2026, 11, 5), 7)
+    noms = [[e["titre"] for e in j["evenements"]] for j in jours]
+    assert noms[0] == ["Nuit blanche"] and noms[1] == ["Vacances", "Nuit blanche"] and noms[3] == ["Vacances"] and noms[4] == []
+    assert jours[1]["evenements"][1]["suite"] is True and "suite" not in jours[0]["evenements"][0]
+
+
+SEMAINE = {
+    "daily": {"time": [f"2026-11-{5 + i:02d}" for i in range(7)], "weather_code": [63, 2, 0, 3, 61, 95, 71],
+              "temperature_2m_max": [14, 16, 17, 12, 11, 10, 2], "temperature_2m_min": [7, 6, 5, 4, 3, 2, -1],
+              "precipitation_probability_max": [80, 10, 0, 20, 70, 90, 60], "precipitation_sum": [6.2, 0, 0, 0.3, 4, 12, 3],
+              "wind_speed_10m_max": [20, 10, 8, 15, 30, 45, 25], "wind_gusts_10m_max": [40, 20, 15, 30, 60, 80, 45],
+              "uv_index_max": [1, 2, 3, 1, 1, 0, 1], "sunrise": ["2026-11-05T07:42"] * 7, "sunset": ["2026-11-05T17:21"] * 7},
+    "hourly": {"time": [f"2026-11-05T{h:02d}:00" for h in range(24)] + ["2026-11-06T00:00"],
+               "temperature_2m": list(range(25)), "apparent_temperature": list(range(25)), "weather_code": [61] * 25,
+               "precipitation_probability": [50] * 25, "precipitation": [0.4] * 25, "wind_speed_10m": [12] * 25},
+}
+
+
+def test_meteo_semaine(appli):
+    from meteo import Meteo
+
+    class Http(FauxMeteoHTTP):
+        def get(self, url, params=None, timeout=None):
+            r = super().get(url, params, timeout)
+            if "geocoding" not in url:
+                r._content = json.dumps(SEMAINE).encode()
+            return r
+    http = Http()
+    s = Meteo("Lyon", session=http).semaine()
+    assert http.appels[1][1]["forecast_days"] == 7
+    assert len(s["jours"]) == 7 and s["jours"][5]["libelle"] == "Orage" and s["jours"][5]["rafales"] == 80
+    j = s["jours"][0]
+    assert j["lever"] == "07:42" and j["coucher"] == "17:21" and j["pluie_mm"] == 6.2
+    assert len(j["heures"]) == 24 and j["heures"][14] == {"heure": "14:00", "temperature": 14, "ressenti": 14, "libelle": "Pluie faible",
+                                                         "icone": "pluie", "pluie": 50, "pluie_mm": 0.4, "vent": 12}
+    assert len(s["jours"][1]["heures"]) == 1 and s["jours"][2]["heures"] == []
+    c = appli(meteo=Meteo("Lyon", session=Http()), agenda=Agenda(["https://x/basic.ics"], session=FauxHTTP()))
+    assert len(c.get("/api/meteo/semaine").get_json()["jours"]) == 7
+    assert len(c.get("/api/agenda/semaine").get_json()["jours"]) == 7
+    c = appli()
+    assert "MAISON_VILLE" in c.get("/api/meteo/semaine").get_json()["erreur"]

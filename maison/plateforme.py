@@ -243,14 +243,24 @@ class AgendaIOS:
         return None
 
     def du_jour(self, jour=None):
+        jour = jour or datetime.now().astimezone().date()
+        evenements, erreurs = self._entre(jour, 1)
+        return {"jour": jour.isoformat(), "evenements": evenements, "erreurs": erreurs}
+
+    def semaine(self, debut=None, nombre=7):
+        from liens import repartir_par_jour
+        debut = debut or datetime.now().astimezone().date()
+        evenements, erreurs = self._entre(debut, nombre)
+        return {"debut": debut.isoformat(), "jours": repartir_par_jour(evenements, debut, nombre), "erreurs": erreurs}
+
+    def _entre(self, jour, nombre):
         probleme = self._autoriser()
         if probleme:
-            return {"evenements": [], "erreurs": [probleme]}
+            return [], [probleme]
         if self._store is None:
             self._store = self._EKEventStore.alloc().init()
-        maintenant = datetime.now().astimezone()
-        debut = datetime.combine(jour or maintenant.date(), datetime.min.time()).astimezone()
-        fin = debut + timedelta(days=1)
+        debut = datetime.combine(jour, datetime.min.time()).astimezone()
+        fin = datetime.combine(jour + timedelta(days=nombre), datetime.min.time()).astimezone()
         predicat = self._store.predicateForEventsWithStartDate_endDate_calendars_(
             self._NSDate.dateWithTimeIntervalSince1970_(debut.timestamp()),
             self._NSDate.dateWithTimeIntervalSince1970_(fin.timestamp()), None)
@@ -271,7 +281,7 @@ class AgendaIOS:
                 "agenda": str(e.calendar().title()),
             })
         evenements.sort(key=lambda e: (not e["journee"], e["debut"]))
-        return {"jour": debut.date().isoformat(), "evenements": evenements, "erreurs": []}
+        return evenements, []
 
 
 class AgendaSimule:
@@ -280,6 +290,25 @@ class AgendaSimule:
 
     def du_jour(self, jour=None):
         return {"jour": (jour or datetime.now().date()).isoformat(), "evenements": list(self.evenements), "erreurs": []}
+
+    def semaine(self, debut=None, nombre=7):
+        from liens import repartir_par_jour
+        debut = debut or datetime.now().date()
+        evenements = list(self.evenements) or _exemples_semaine(debut)
+        return {"debut": debut.isoformat(), "jours": repartir_par_jour(evenements, debut, nombre), "erreurs": []}
+
+
+def _exemples_semaine(debut):
+    """Rendez-vous d'exemple pour la démonstration sur ordinateur."""
+    exemples = [(0, "09:30", "10:30", "Réunion d'équipe"), (1, "18:30", "19:30", "Piscine des enfants"),
+                (2, "12:30", "14:00", "Déjeuner avec Claire"), (4, "20:00", "23:00", "Dîner chez Paul")]
+    sortie = []
+    for n, h1, h2, titre in exemples:
+        jour = (debut + timedelta(days=n)).isoformat()
+        sortie.append({"titre": titre, "lieu": "", "debut": f"{jour}T{h1}:00", "fin": f"{jour}T{h2}:00", "journee": False, "agenda": "Démo"})
+    sortie.append({"titre": "Vacances scolaires", "lieu": "", "debut": (debut + timedelta(days=5)).isoformat(),
+                   "fin": (debut + timedelta(days=7)).isoformat(), "journee": True, "agenda": "Démo"})
+    return sortie
 
 
 # ---------------------------------------------------------------- Code-barres

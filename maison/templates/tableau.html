@@ -102,10 +102,50 @@ button.dot:hover{border-color:var(--ok);background:var(--ok-soft)}
 .corvees li.fait span{text-decoration:line-through;color:var(--muted)}
 .case{width:22px;height:22px;border-radius:7px;border:1.5px solid var(--line);background:var(--surface);flex:none;display:grid;place-items:center;padding:0;color:var(--accent-ink);font-size:14px;line-height:1}
 .fait .case{background:var(--ok);border-color:var(--ok)}
-dialog#dlgMenage{border:0;border-radius:16px;padding:0;background:var(--surface);color:var(--ink);width:min(680px,calc(100vw - 24px));max-height:calc(100vh - 48px);box-shadow:0 20px 60px rgba(0,0,0,.35)}
-dialog#dlgMenage::backdrop{background:rgba(10,16,30,.5)}
-.editeur{padding:18px;display:flex;flex-direction:column;gap:12px}
-.editeur h2{margin:0;font-family:var(--f-display);font-size:21px}
+/* Fenêtres (planning du ménage, météo et agenda de la semaine) : en-tête et pied fixes, milieu qui défile.
+   Hauteur et position suivent la partie visible de l'écran (--vvh, --vvtop), pour rester au-dessus du clavier de l'iPhone. */
+dialog.fenetre{border:0;border-radius:16px;padding:0;background:var(--surface);color:var(--ink);width:min(720px,calc(100vw - 24px));
+  position:fixed;inset:auto 0;top:calc(var(--vvtop,0px) + 12px);margin:0 auto;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.35);
+  max-height:calc(100vh - 24px);max-height:calc(var(--vvh,100dvh) - 24px)}
+@media (min-height:700px){dialog.fenetre{top:calc(var(--vvtop,0px) + 4vh);max-height:calc(var(--vvh,100dvh) - 8vh)}}
+dialog.fenetre[open]{display:flex;flex-direction:column}
+dialog.fenetre::backdrop{background:rgba(10,16,30,.5)}
+body:has(dialog.fenetre[open]){overflow:hidden}
+.fenetre .contenu{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
+.fenetre .f-tete{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 18px 12px;border-bottom:1px solid var(--line);flex:none}
+.fenetre .f-tete h2{margin:0;font-family:var(--f-display);font-size:21px;min-width:0}
+.fenetre .f-corps{overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:12px 18px 16px;flex:1 1 auto;min-height:0}
+.fenetre .f-pied{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:12px 18px;border-top:1px solid var(--line);flex:none;background:var(--surface)}
+.fenetre .f-pied .row{display:flex;gap:8px;margin-left:auto}
+dialog.fenetre input,dialog.fenetre select,dialog.fenetre textarea{font-size:16px}  /* sous 16 px, l'iPhone zoome pendant la saisie */
+.fermer{width:34px;height:34px;border-radius:50%;border:0;background:var(--accent-soft);color:var(--accent);font-size:20px;line-height:1;flex:none;cursor:pointer}
+.f-corps h3{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:16px 0 8px}
+.f-corps h3:first-child{margin-top:4px}
+/* Météo de la semaine */
+.jours7{display:grid;grid-template-columns:repeat(7,minmax(66px,1fr));gap:6px;overflow-x:auto;padding-bottom:4px}
+.jours7 button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;cursor:pointer}
+.jours7 button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.jours7 .n{font-size:12px;font-weight:700;color:var(--muted);white-space:nowrap}
+.jours7 svg{width:32px;height:32px}
+.jours7 .mm{font-family:var(--f-mono);font-size:12.5px;white-space:nowrap}
+.jours7 .mm span{color:var(--muted)}
+.jours7 .p{font-size:11.5px;color:var(--accent);min-height:1.3em}
+.detail{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.detail div{background:var(--bg);border-radius:10px;padding:8px 10px;font-size:12.5px;color:var(--muted)}
+.detail b{display:block;color:var(--ink);font-size:15px;font-weight:600}
+.heures{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px}
+.heures div{flex:none;width:60px;display:flex;flex-direction:column;align-items:center;gap:1px;padding:8px 2px;border-radius:10px;background:var(--bg);font-size:12px;color:var(--muted)}
+.heures .t{font-family:var(--f-mono);font-size:15px;font-weight:500;color:var(--ink)}
+.heures svg{width:28px;height:28px}
+.heures .p{color:var(--accent);min-height:1.3em}
+/* Agenda de la semaine */
+.sem-jour{padding:10px 0;border-top:1px solid var(--line)}
+.sem-jour:first-child{border-top:0;padding-top:0}
+.sem-jour h4{margin:0 0 4px;font-size:15px;font-weight:700}
+.sem-jour.auj h4{color:var(--accent)}
+.sem-vide{color:var(--muted);font-size:13.5px;margin:0}
+#carteMeteo #meteo,#carteAgenda #agenda{cursor:pointer}
+.editeur-aide{margin:0 0 4px}
 .ligne-t{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 8px;padding:10px 0;border-top:1px solid var(--line)}
 .ligne-t .champs{display:flex;gap:8px;flex-wrap:wrap;min-width:0}
 .ligne-t select,.ligne-t input{font:inherit;color:var(--ink);border:1.5px solid var(--line);background:var(--bg);border-radius:9px;padding:7px 9px;min-width:0}
@@ -228,14 +268,14 @@ ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;m
 
   <main class="grid">
     <section class="card" id="carteAgenda" aria-labelledby="h-agenda">
-      <div class="head"><h2 id="h-agenda">Aujourd'hui</h2><span class="hint" id="agendaNb"></span></div>
+      <div class="head"><h2 id="h-agenda">Aujourd'hui</h2><span class="hint" id="agendaNb"></span><button class="btn ghost small" type="button" id="agendaSemaine">7 jours</button></div>
       <div id="agenda"><p class="hint dots">Chargement</p></div>
     </section>
 
     <div class="autres">
     <div class="colonne">
     <section class="card" id="carteMeteo" aria-labelledby="h-meteo">
-      <div class="head"><h2 id="h-meteo">Météo</h2><span class="hint" id="meteoLieu"></span></div>
+      <div class="head"><h2 id="h-meteo">Météo</h2><span class="hint" id="meteoLieu"></span><button class="btn ghost small" type="button" id="meteoSemaine">7 jours</button></div>
       <div id="meteo"><p class="hint dots">Chargement</p></div>
     </section>
 
@@ -294,7 +334,8 @@ ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;m
   </section>
 </div>
 
-<dialog id="dlgMenage" aria-labelledby="h-edit"><div class="editeur" id="editeur"></div></dialog>
+<dialog id="dlgMenage" class="fenetre" aria-labelledby="h-edit"><div class="contenu" id="editeur"></div></dialog>
+<dialog id="dlgSemaine" class="fenetre" aria-labelledby="h-semaine"><div class="contenu" id="semaineContenu"></div></dialog>
 <script>
 (() => {
 const M = window.MAISON || {};
@@ -536,7 +577,9 @@ function ouvrirEditeur(){
   let brouillon = menage.taches.map(t => ({...t, jours:[...t.jours]}));
   const pieces = menage.plan.pieces;
   const dessiner = () => {
-    $('#editeur').innerHTML = `<div class="head"><h2 id="h-edit">Planning du ménage</h2><button class="btn ghost small" type="button" id="edAjout">Ajouter une tâche</button></div>
+    const defile = $('#edCorps')?.scrollTop || 0;  // garder la position après une suppression
+    $('#editeur').innerHTML = `<div class="f-tete"><h2 id="h-edit">Planning du ménage</h2><button class="btn ghost small" type="button" id="edAjout">Ajouter une tâche</button></div>
+      <div class="f-corps" id="edCorps">
       <p class="hint">Choisissez la pièce, le nom de la tâche et les jours où elle revient.</p>
       <div id="edListe">${brouillon.map((t, i) => `<div class="ligne-t" data-i="${i}">
         <div class="champs"><select aria-label="Pièce">${pieces.map(p => `<option value="${p.id}"${p.id===t.piece?' selected':''}>${esc(p.nom)}</option>`).join('')}</select>
@@ -544,7 +587,9 @@ function ouvrirEditeur(){
         <button type="button" class="suppr" aria-label="Supprimer la tâche">×</button>
         <div class="jours">${NOMS_JOURS.map((j, n) => `<button type="button" data-n="${n}" aria-pressed="${t.jours.includes(n)}" aria-label="${JOURS_LONGS[n]}">${j}</button>`).join('')}</div>
       </div>`).join('')}</div>
-      <div class="head"><span class="hint" id="edMsg"></span><div class="row"><button class="btn ghost" type="button" id="edAnnuler">Annuler</button><button class="btn" type="button" id="edOk">Enregistrer</button></div></div>`;
+      </div>
+      <div class="f-pied"><span class="hint" id="edMsg"></span><div class="row"><button class="btn ghost" type="button" id="edAnnuler">Annuler</button><button class="btn" type="button" id="edOk">Enregistrer</button></div></div>`;
+    $('#edCorps').scrollTop = defile;
     const lire = () => $('#edListe').querySelectorAll('.ligne-t').forEach(l => {
       const t = brouillon[+l.dataset.i]; t.piece = l.querySelector('select').value; t.titre = l.querySelector('input').value;
     });
@@ -556,7 +601,11 @@ function ouvrirEditeur(){
       });
       l.querySelector('.suppr').onclick = () => { lire(); brouillon.splice(+l.dataset.i, 1); dessiner(); };
     });
-    $('#edAjout').onclick = () => { lire(); brouillon.push({id:'', piece: pieceChoisie || pieces[0].id, titre:'', jours:[jourSemaine(jourChoisi || jourCle(new Date()))]}); dessiner(); $('#edListe').lastElementChild?.querySelector('input').focus(); };
+    $('#edAjout').onclick = () => {
+      lire(); brouillon.push({id:'', piece: pieceChoisie || pieces[0].id, titre:'', jours:[jourSemaine(jourChoisi || jourCle(new Date()))]}); dessiner();
+      const nouvelle = $('#edListe').lastElementChild;
+      if (nouvelle){ $('#edCorps').scrollTop = $('#edCorps').scrollHeight; nouvelle.querySelector('input').focus({preventScroll:true}); }
+    };
     $('#edAnnuler').onclick = () => dlgMenage.close();
     $('#edOk').onclick = async () => {
       lire();
@@ -718,6 +767,107 @@ function renderSynchro(s){
     catch { $('#r_forcerMsg').className = 'err'; $('#r_forcerMsg').textContent = 'Échec.'; }
   };
 }
+
+// ---------- Fenêtres : place laissée par le clavier de l'iPhone ----------
+const vue = window.visualViewport;
+function ajusterFenetres(){
+  if (!vue) return;
+  const r = document.documentElement.style;
+  r.setProperty('--vvh', vue.height + 'px'); r.setProperty('--vvtop', vue.offsetTop + 'px');
+  // clavier qui s'ouvre : le champ en cours de saisie remonte dans la partie visible
+  const champ = document.activeElement;
+  if (champ?.matches?.('dialog.fenetre input, dialog.fenetre select, dialog.fenetre textarea'))
+    requestAnimationFrame(() => champ.scrollIntoView({block:'nearest'}));
+}
+vue?.addEventListener('resize', ajusterFenetres); vue?.addEventListener('scroll', ajusterFenetres); ajusterFenetres();
+// le champ en cours de saisie reste visible au-dessus du clavier
+document.addEventListener('focusin', e => {
+  if (e.target.matches?.('dialog.fenetre input, dialog.fenetre select, dialog.fenetre textarea'))
+    setTimeout(() => e.target.scrollIntoView({block:'nearest'}), 350);
+});
+
+// ---------- Météo et agenda des 7 prochains jours ----------
+const dlgSemaine = $('#dlgSemaine');
+const semaines = {};
+function fenetreSemaine(titre, corps){
+  $('#semaineContenu').innerHTML = `<div class="f-tete"><h2 id="h-semaine">${titre}</h2><button class="fermer" type="button" aria-label="Fermer">×</button></div><div class="f-corps">${corps}</div>`;
+  $('#semaineContenu .fermer').onclick = () => dlgSemaine.close();
+  if (!dlgSemaine.open) dlgSemaine.showModal();
+}
+dlgSemaine.addEventListener('click', e => { if (e.target === dlgSemaine) dlgSemaine.close(); });  // toucher à côté ferme
+async function chargerSemaine(quoi){
+  const c = semaines[quoi];
+  if (c && Date.now() - c.t < 600000) return c.d;
+  const r = await fetch(`api/${quoi}/semaine`, {cache:'no-store'});
+  if (r.status === 401){ location.reload(); throw new Error('Reconnexion'); }
+  if (!r.ok) throw new Error('Serveur injoignable');
+  const d = await r.json();
+  semaines[quoi] = {t: Date.now(), d};
+  return d;
+}
+const dateDe = iso => { const [a, m, j] = String(iso).split('-').map(Number); return new Date(a, m - 1, j, 12); };
+const majuscule = s => s.charAt(0).toUpperCase() + s.slice(1);
+const nomCourt = (iso, i) => i === 0 ? 'Auj.' : i === 1 ? 'Dem.' : majuscule(fmt({weekday:'short', day:'numeric'}, dateDe(iso)));
+const nomLong = (iso, i) => (i === 0 ? 'Aujourd’hui · ' : i === 1 ? 'Demain · ' : '') + (i < 2 ? fmt({weekday:'long', day:'numeric', month:'long'}, dateDe(iso)) : majuscule(fmt({weekday:'long', day:'numeric', month:'long'}, dateDe(iso))));
+const nombre = (v, unite, dec=0) => v == null ? '–' : `${(+v).toFixed(dec).replace('.', ',')} ${unite}`;
+
+async function ouvrirMeteo(){
+  if (!M.meteo) return;
+  fenetreSemaine('Météo de la semaine', '<p class="hint dots">Chargement des prévisions</p>');
+  try {
+    const d = await chargerSemaine('meteo');
+    if (d.erreur) throw new Error(d.erreur);
+    dessinerMeteo(d, 0);
+  } catch (e) { fenetreSemaine('Météo de la semaine', `<p class="err">${esc(e.message || 'Météo indisponible pour le moment.')}</p>`); }
+}
+function dessinerMeteo(d, choisi){
+  const j = d.jours[choisi];
+  if (!j){ fenetreSemaine('Météo de la semaine', '<p class="err">Pas de prévisions pour le moment.</p>'); return; }
+  const boutons = d.jours.map((x, i) => `<button type="button" data-i="${i}" aria-pressed="${i === choisi}">
+      <span class="n">${esc(nomCourt(x.date, i))}</span>${icone(x.icone)}
+      <span class="mm">${degres(x.max)} <span>${degres(x.min)}</span></span><span class="p">${x.pluie ? Math.round(x.pluie) + ' %' : ''}</span></button>`).join('');
+  let heures = j.heures || [];
+  if (choisi === 0){ const h = heure(new Date()).slice(0, 2); heures = heures.filter(x => x.heure.slice(0, 2) >= h); }
+  const pluie = j.pluie == null ? '–' : `${Math.round(j.pluie)} %` + (j.pluie_mm ? ` · ${nombre(j.pluie_mm, 'mm', 1)}` : '');
+  const detail = [
+    ['Températures', `${degres(j.min)} / ${degres(j.max)}`],
+    ['Pluie', pluie],
+    ['Vent', j.vent == null ? '–' : nombre(j.vent, 'km/h') + (j.rafales ? ` · rafales ${Math.round(j.rafales)}` : '')],
+    ['Indice UV', j.uv == null ? '–' : Math.round(j.uv)],
+    ['Soleil', j.lever ? `${j.lever} – ${j.coucher}` : '–'],
+  ].map(([n, v]) => `<div>${n}<b>${v}</b></div>`).join('');
+  const lignes = heures.map(x => `<div><span>${esc(x.heure)}</span>${icone(x.icone)}<span class="t">${degres(x.temperature)}</span>
+      <span class="p">${x.pluie ? Math.round(x.pluie) + ' %' : ''}</span><span>${x.vent == null ? '' : Math.round(x.vent) + ' km/h'}</span></div>`).join('');
+  fenetreSemaine(`Météo${d.lieu ? ' · ' + esc(d.lieu) : ''}`, `<div class="jours7" role="group" aria-label="Jour">${boutons}</div>
+    <h3>${esc(nomLong(j.date, choisi))} : ${esc(j.libelle)}</h3><div class="detail">${detail}</div>
+    ${lignes ? `<h3>Heure par heure</h3><div class="heures">${lignes}</div>` : ''}
+    <p class="credit" style="margin-top:12px">Données <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></p>`);
+  const bandeau = dlgSemaine.querySelector('.jours7');
+  bandeau.querySelectorAll('button').forEach(b => b.onclick = () => { const x = bandeau.scrollLeft; dessinerMeteo(d, +b.dataset.i); dlgSemaine.querySelector('.jours7').scrollLeft = x; });
+}
+
+async function ouvrirAgenda(){
+  if (!M.agenda) return;
+  fenetreSemaine('Les 7 prochains jours', '<p class="hint dots">Chargement de l’agenda</p>');
+  try {
+    const d = await chargerSemaine('agenda');
+    const tous = (d.jours || []).flatMap(j => j.evenements || []);
+    const plusieurs = new Set(tous.map(e => e.agenda)).size > 1, now = Date.now();
+    const quand = e => e.journee ? 'Journée' : e.suite ? `→ ${e.fin ? heure(new Date(e.fin)) : ''}` : heure(new Date(e.debut)) + (e.fin ? '–' + heure(new Date(e.fin)) : '');
+    const jours = (d.jours || []).map((j, i) => {
+      const evs = j.evenements || [];
+      const lignes = evs.map(e => `<li class="${!e.journee && e.fin && new Date(e.fin).getTime() < now ? 'passe' : ''}"><span class="h">${quand(e)}</span>
+        <span class="t">${esc(e.titre)}${e.lieu ? `<small>${esc(e.lieu)}</small>` : ''}${plusieurs && e.agenda ? `<small>${esc(e.agenda)}</small>` : ''}</span></li>`).join('');
+      return `<section class="sem-jour${i === 0 ? ' auj' : ''}"><h4>${esc(nomLong(j.jour, i))}</h4>${evs.length ? `<ul class="events">${lignes}</ul>` : '<p class="sem-vide">Rien de prévu</p>'}</section>`;
+    }).join('');
+    fenetreSemaine('Les 7 prochains jours', (d.erreurs || []).map(e => `<p class="err">${esc(e)}</p>`).join('') + (jours || '<p class="sem-vide">Rien de prévu.</p>'));
+  } catch (e) { fenetreSemaine('Les 7 prochains jours', `<p class="err">${esc(e.message || 'Agenda indisponible pour le moment.')}</p>`); }
+}
+const pasUnControle = e => !e.target.closest('a, button, input, select, summary, label');
+$('#meteoSemaine').hidden = !M.meteo; $('#agendaSemaine').hidden = !M.agenda;
+$('#meteoSemaine').onclick = ouvrirMeteo; $('#agendaSemaine').onclick = ouvrirAgenda;
+$('#meteo').addEventListener('click', e => { if (pasUnControle(e)) ouvrirMeteo(); });
+$('#agenda').addEventListener('click', e => { if (pasUnControle(e)) ouvrirAgenda(); });
 
 // ---------- Mise à jour ----------
 let enCours = false, dernier = null;

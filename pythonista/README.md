@@ -5,8 +5,8 @@ L'appli Maison (tableau de bord et Garde-manger) tourne directement sur l'iPhone
 | Fonction | Dans Pythonista |
 | --- | --- |
 | Tâches (Rappels Apple) | lues directement ; touchez le rond pour cocher une tâche |
-| Météo | aujourd'hui et demain pour votre ville (Open-Meteo, gratuit, sans compte) |
-| Agenda du jour | calendrier de l'iPhone (ajoutez-y votre compte Google), ou adresse iCal de Google |
+| Météo | aujourd'hui et demain pour votre ville ; touchez la carte pour les 7 jours, heure par heure (Open-Meteo, gratuit, sans compte) |
+| Agenda du jour | calendrier de l'iPhone (ajoutez-y votre compte Google), ou adresse iCal de Google ; touchez la carte pour les 7 prochains jours |
 | Ménage | plan de l'appartement, pièces à nettoyer surlignées, tâches du jour à cocher, planning modifiable ; partagé par iCloud |
 | Garde-manger | hors connexion ; placard et courses partagés par iCloud entre l'iPhone et l'iPad |
 | Codes-barres | dans Garde-manger, **Scanner un code-barres** prend une photo du code et range le produit au placard (fiche Open Food Facts) |

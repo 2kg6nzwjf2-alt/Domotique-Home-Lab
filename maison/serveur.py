@@ -178,6 +178,25 @@ def create_app(dossier_donnees=None, mot_de_passe=None, cle_raccourci=None, agen
         }
         return jsonify(resultat)
 
+    @app.get("/api/agenda/semaine")
+    def agenda_semaine():
+        if agenda is None:
+            return jsonify(jours=[], erreurs=["Aucun agenda configuré (MAISON_AGENDA_ICAL)."])
+        try:
+            return jsonify(agenda.semaine())
+        except Exception:
+            app.logger.exception("agenda")
+            return jsonify(jours=[], erreurs=["Agenda illisible"])
+
+    @app.get("/api/meteo/semaine")
+    def meteo_semaine():
+        if meteo is None:
+            return jsonify(erreur="Indiquez votre ville dans MAISON_VILLE.")
+        try:
+            return jsonify(meteo.semaine())
+        except ErreurMeteo as e:
+            return jsonify(erreur=str(e))
+
     @app.post("/api/menage/cocher")
     def menage_cocher():
         corps = request.get_json(silent=True) or {}

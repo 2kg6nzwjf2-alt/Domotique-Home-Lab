@@ -107,6 +107,23 @@ class Appli:
         except Exception as e:
             return {"evenements": [], "erreurs": [f"Agenda illisible ({type(e).__name__})"]}
 
+    def agenda_semaine(self):
+        source = self._agenda_ical or self.agenda_appareil
+        if source is None:
+            return {"jours": [], "erreurs": ["Aucun agenda : autorisez le Calendrier ou indiquez une adresse iCal dans les Réglages."]}
+        try:
+            return source.semaine()
+        except Exception as e:
+            return {"jours": [], "erreurs": [f"Agenda illisible ({type(e).__name__})"]}
+
+    def meteo_semaine(self):
+        if self._meteo is None:
+            return {"erreur": "Indiquez votre ville dans les Réglages."}
+        try:
+            return self._meteo.semaine()
+        except ErreurMeteo as e:
+            return {"erreur": str(e)}
+
     def liste_courses(self):
         return self.reglages.get("liste_courses") or "Courses"
 
@@ -263,6 +280,10 @@ class Gestionnaire(BaseHTTPRequestHandler):
             return self._envoyer(200, a.tableau())
         if chemin == "/api/reglages":
             return self._envoyer(200, a.reglages_publics())
+        if chemin == "/api/agenda/semaine":
+            return self._envoyer(200, a.agenda_semaine())
+        if chemin == "/api/meteo/semaine":
+            return self._envoyer(200, a.meteo_semaine())
         if chemin == "/api/rappels/listes":
             try:
                 return self._envoyer(200, a.listes_rappels())

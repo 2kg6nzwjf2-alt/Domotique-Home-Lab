@@ -366,3 +366,10 @@ def test_diagnostic_synchro_et_copies(tmp_path):
         assert c.json("PUT", "/api/menage/taches", {"taches": [], "version": m["version"]})[0] == 409
     finally:
         serveur.shutdown()
+
+
+def test_semaine_version_pythonista(appli):
+    _, c, _, _ = appli
+    s = c.json("GET", "/api/agenda/semaine")[1]
+    assert len(s["jours"]) == 7 and s["erreurs"] == []
+    assert c.json("GET", "/api/meteo/semaine")[1] == {"erreur": "Indiquez votre ville dans les Réglages."}

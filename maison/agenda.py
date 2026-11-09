@@ -1,4 +1,4 @@
-"""Agenda du jour, lu depuis l'adresse secrète iCal de Google Agenda (lecture seule).
+"""Agenda du jour et des 7 prochains jours, lu depuis l'adresse secrète iCal de Google Agenda (lecture seule).
 
 Google Agenda > Paramètres > (votre agenda) > Intégrer l'agenda >
 « Adresse secrète au format iCal ». Plusieurs adresses peuvent être données,
@@ -13,6 +13,8 @@ from zoneinfo import ZoneInfo
 import icalendar
 import recurring_ical_events
 import requests
+
+from liens import repartir_par_jour
 
 DUREE_CACHE = 300  # secondes
 
@@ -51,6 +53,16 @@ class Agenda:
 
     def du_jour(self, jour=None):
         jour = jour or datetime.now(self.fuseau).date()
+        evenements, erreurs = self._entre(jour, jour + timedelta(days=1))
+        return {"jour": jour.isoformat(), "evenements": evenements, "erreurs": erreurs}
+
+    def semaine(self, debut=None, nombre=7):
+        debut = debut or datetime.now(self.fuseau).date()
+        evenements, erreurs = self._entre(debut, debut + timedelta(days=nombre))
+        return {"debut": debut.isoformat(), "jours": repartir_par_jour(evenements, debut, nombre, self.fuseau), "erreurs": erreurs}
+
+    def _entre(self, debut, fin):
+        """Événements entre deux dates (fin exclue), tous agendas confondus, et erreurs de lecture."""
         evenements, erreurs = [], []
         for numero, adresse in enumerate(self.adresses, start=1):
             try:
@@ -61,7 +73,7 @@ class Agenda:
                 erreurs.append(f"Agenda {numero} illisible" + (f" (erreur {statut})" if statut else ""))
                 continue
             nom = str(calendrier.get("X-WR-CALNAME", "") or f"Agenda {numero}")
-            for ev in recurring_ical_events.of(calendrier).at(jour):
+            for ev in recurring_ical_events.of(calendrier).between(debut, fin):
                 if str(ev.get("STATUS", "")).upper() == "CANCELLED":
                     continue
                 debut = self._heure(ev.decoded("DTSTART"))
@@ -78,4 +90,4 @@ class Agenda:
                     "agenda": nom,
                 })
         evenements.sort(key=lambda e: (not e["journee"], e["debut"]))
-        return {"jour": jour.isoformat(), "evenements": evenements, "erreurs": erreurs}
+        return evenements, erreurs

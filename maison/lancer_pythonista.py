@@ -151,19 +151,25 @@ def creer_appli():
         except Exception as e:
             print("Téléchargement iCloud indisponible :", e)
             icloud = None
+        try:
+            ecran = plateforme.EcranIOS()
+        except Exception as e:
+            print("Mode cadre : écran toujours allumé indisponible :", e)
+            ecran = None
     else:
         rappels = plateforme.RappelsSimules(os.path.join(DONNEES, "rappels-demo.json"))
         agenda = plateforme.AgendaSimule()
         coffre = plateforme.CoffreFichier(os.path.join(DONNEES, "reglages-demo.json"))
-        scanner = icloud = None
+        scanner = icloud = ecran = None
     # données partagées entre l'iPhone et l'iPad seulement si le dossier Maison est dans iCloud Drive
     partage = "icloud" if "Mobile Documents" in os.path.abspath(DONNEES) else "appareil"
     return appli_locale.Appli(DONNEES, rappels, agenda, coffre, scanner=scanner,
-                              icloud=icloud, appareil=plateforme.nom_appareil(), partage=partage)
+                              icloud=icloud, appareil=plateforme.nom_appareil(), partage=partage, ecran=ecran)
 
 
 def main():
-    serveur, adresse = appli_locale.demarrer(creer_appli())
+    appli = creer_appli()
+    serveur, adresse = appli_locale.demarrer(appli)
     if ui is None:
         print("Démonstration ouverte sur", adresse, "(Ctrl+C pour arrêter)")
         import webbrowser
@@ -192,6 +198,11 @@ def main():
             pass
     finally:
         serveur.shutdown()
+        if appli.ecran is not None:  # mode cadre : l'écran peut de nouveau se mettre en veille
+            try:
+                appli.ecran.garder_allume(False)
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":

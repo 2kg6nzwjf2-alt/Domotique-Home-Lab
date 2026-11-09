@@ -351,6 +351,19 @@ class ScannerIOS:
         return codes[0][1]
 
 
+# ---------------------------------------------------------------- Écran
+
+class EcranIOS:
+    """Garde l'écran allumé (mode cadre) tant que l'appli est ouverte."""
+
+    def __init__(self):
+        import console
+        self._console = console
+
+    def garder_allume(self, actif):
+        self._console.set_idle_timer_disabled(bool(actif))
+
+
 # ---------------------------------------------------------------- iCloud Drive
 
 class ICloudIOS:

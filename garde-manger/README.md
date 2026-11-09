@@ -68,6 +68,10 @@ GM_MOT_DE_PASSE="mon-mot-de-passe" ANTHROPIC_API_KEY="sk-ant-..." python app.py
 
 Sans mot de passe, toute personne connectée à votre Wi-Fi peut ouvrir l'appli. C'est acceptable à la maison, pas sur un réseau public.
 
+## Dates de péremption
+
+Touchez un produit du placard pour indiquer sa date « à consommer avant » (aujourd'hui, demain, dans 3 jours, 1 ou 2 semaines, ou une date du calendrier) ; le scan d'un code-barres la propose aussi. Le placard signale les produits périmés ou à finir dans les 3 jours, et les recettes qui utilisent un produit à finir dans les 2 jours passent en premier.
+
 ## Codes-barres
 
 Sous « Ajouter au placard », le bouton **Code-barres** retrouve un produit à partir des chiffres de son code-barres (EAN-13, EAN-8 ou UPC). La fiche vient d'[Open Food Facts](https://world.openfoodfacts.org), une base collaborative gratuite et sans compte : seul le numéro lui est envoyé.

@@ -25,11 +25,17 @@
   --f-mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
   color-scheme:light;
 }
-@media (prefers-color-scheme: dark){:root{
+/* Sombre : selon l'appareil, ou forcé par le mode cadre la nuit (data-theme) */
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0d1422; --surface:#151f35; --ink:#e6ebf5; --muted:#99a5bd; --line:#2a3756;
   --accent:#86a8ee; --accent-ink:#0d1422; --accent-soft:#1c2b4f;
   --ok:#6fc893; --ok-soft:#163224; --warn:#e9b65e; --warn-soft:#3a2b11; --bad:#f08c79; --bad-soft:#3a1d19;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.25); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d1422; --surface:#151f35; --ink:#e6ebf5; --muted:#99a5bd; --line:#2a3756;
+  --accent:#86a8ee; --accent-ink:#0d1422; --accent-soft:#1c2b4f;
+  --ok:#6fc893; --ok-soft:#163224; --warn:#e9b65e; --warn-soft:#3a2b11; --bad:#f08c79; --bad-soft:#3a1d19;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.25); color-scheme:dark}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);background:var(--bg)}
@@ -46,6 +52,20 @@ a{color:var(--accent)}
 .top .date{color:var(--muted);margin:6px 0 0;font-size:16px}
 .clock{font-family:var(--f-mono);font-size:clamp(30px,6vw,44px);font-weight:500;font-variant-numeric:tabular-nums;line-height:1}
 .maj{font-size:12.5px;color:var(--muted);text-align:right;margin-top:4px}
+#cadreBtn{margin-top:8px;float:right}
+/* Mode cadre : l'iPad posé dans la maison, écran toujours allumé, grand texte, sombre la nuit */
+body.cadre{font-size:17px}
+body.cadre .top h1{font-size:clamp(24px,3vw,30px)}
+body.cadre .top .date{font-size:clamp(20px,2.6vw,28px);color:var(--ink);font-weight:600}
+body.cadre .clock{font-size:clamp(64px,10vw,120px)}
+body.cadre .card h2{font-size:23px}
+body.cadre .events .t,body.cadre .tasks li{font-size:17px}
+body.cadre .events .h{font-size:15px}
+body.cadre .jour .temp{font-size:34px}
+body.cadre .jour .lib{font-size:16px}
+body.cadre .card:has(#reglages){display:none}
+body.cadre .card > .hint{display:none}
+body.cadre #cadreBtn{opacity:.55}
 .resume{margin:8px 0 0;font-size:15px;font-weight:500}
 .resume b{color:var(--bad)}
 .events li.tache .h{color:var(--warn)}
@@ -291,6 +311,7 @@ ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;m
     <div>
       <div class="clock" id="clock" aria-live="off"></div>
       <div class="maj" id="maj"></div>
+      <button class="btn ghost small" type="button" id="cadreBtn" aria-pressed="false">Mode cadre</button>
     </div>
   </header>
 
@@ -983,8 +1004,55 @@ $('#meteoSemaine').onclick = ouvrirMeteo; $('#agendaSemaine').onclick = ouvrirAg
 $('#meteo').addEventListener('click', e => { if (pasUnControle(e)) ouvrirMeteo(); });
 $('#agenda').addEventListener('click', e => { if (pasUnControle(e)) ouvrirAgenda(); });
 
+let enCours = false, dernier = null;  // dernières données du tableau (aussi lues par le mode cadre)
+
+// ---------- Mode cadre ----------
+// Activé sur cet appareil : dans Pythonista, réglage enregistré (et écran gardé allumé par l'appli) ;
+// dans un navigateur, mémorisé par le navigateur, avec le verrou d'écran s'il existe.
+const CLE_CADRE = 'maison.cadre';
+let cadre = APPAREIL ? (M.reglages || {}).cadre === '1' : (() => { try { return localStorage.getItem(CLE_CADRE) === '1'; } catch { return false; } })();
+let verrouEcran = null, rechargementNuit = null;
+async function garderEcranAllume(actif){
+  if (APPAREIL || !('wakeLock' in navigator)) return;
+  try {
+    if (actif && !verrouEcran) { verrouEcran = await navigator.wakeLock.request('screen'); verrouEcran.addEventListener('release', () => { verrouEcran = null; }); }
+    if (!actif && verrouEcran) { await verrouEcran.release(); verrouEcran = null; }
+  } catch {}
+}
+document.addEventListener('visibilitychange', () => { if (cadre && document.visibilityState === 'visible') garderEcranAllume(true); });
+// nuit : entre le coucher et le lever du soleil (météo), sinon de 21 h à 7 h
+function estLaNuit(){
+  const j = dernier?.meteo?.jours?.[0], h = heure(new Date());
+  if (j?.lever && j?.coucher) return h < j.lever || h >= j.coucher;
+  return h >= '21:00' || h < '07:00';
+}
+function appliquerTheme(){
+  if (cadre) document.documentElement.dataset.theme = estLaNuit() ? 'dark' : 'light';
+  else delete document.documentElement.dataset.theme;
+}
+function appliquerCadre(){
+  document.body.classList.toggle('cadre', cadre);
+  $('#cadreBtn').textContent = cadre ? 'Quitter le mode cadre' : 'Mode cadre';
+  $('#cadreBtn').setAttribute('aria-pressed', String(cadre));
+  appliquerTheme(); garderEcranAllume(cadre);
+  // une fois par nuit (3 h 30), la page se recharge : nouvelle version, nouveau jour, mémoire libérée
+  clearTimeout(rechargementNuit);
+  if (cadre){
+    const d = new Date(), cible = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 3, 30);
+    if (cible <= d) cible.setDate(cible.getDate() + 1);
+    rechargementNuit = setTimeout(() => location.reload(), cible - d);
+  }
+}
+$('#cadreBtn').onclick = async () => {
+  cadre = !cadre; appliquerCadre();
+  if (APPAREIL){
+    try { await fetch('api/reglages', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({cadre: cadre ? '1' : ''})}); } catch {}
+  } else { try { localStorage.setItem(CLE_CADRE, cadre ? '1' : ''); } catch {} }
+};
+appliquerCadre();
+setInterval(appliquerTheme, 60000);
+
 // ---------- Mise à jour ----------
-let enCours = false, dernier = null;
 async function charger(){
   if (enCours) return; enCours = true;
   try {
@@ -993,7 +1061,7 @@ async function charger(){
     if (!r.ok) throw new Error('HTTP ' + r.status);
     dernier = await r.json();
     renderAgenda(dernier.agenda, dernier.rappels); renderTaches(dernier.rappels); renderGm(dernier.garde_manger); renderMeteo(dernier.meteo); renderMenage(dernier.menage);
-    renderResume(dernier); renderSynchro(dernier.synchro);
+    renderResume(dernier); renderSynchro(dernier.synchro); appliquerTheme();
     $('#maj').textContent = 'Mis à jour à ' + heure(new Date());
   } catch {
     $('#maj').textContent = 'Serveur injoignable' + (dernier ? ' : dernières données affichées' : '');

@@ -52,7 +52,7 @@ def test_reglages_et_anciennes_cles_effacees(tmp_path):
     a = appli_locale.Appli(str(tmp_path / "d"), plateforme.RappelsSimules(str(tmp_path / "r.json")), None, coffre)
     assert coffre.lire() == {"ville": "Lyon"}  # Smart Life retiré : clés effacées du trousseau
     r = a.enregistrer_reglages({"ville": "Brest", "liste_courses": "Épicerie", "agenda_ical": "https://x/basic.ics"})
-    assert r == {"ville": "Brest", "liste_courses": "Épicerie", "agenda_ical": True}
+    assert r == {"ville": "Brest", "liste_courses": "Épicerie", "agenda_ical": True, "cadre": ""}
     assert "https://x" not in json.dumps(r)  # l'adresse iCal secrète ne revient pas à la page
     a.enregistrer_reglages({"agenda_ical": ""})
     assert coffre.lire()["agenda_ical"] == "https://x/basic.ics"  # vide = conservée
@@ -374,3 +374,21 @@ def test_semaine_version_pythonista(appli):
     s = c.json("GET", "/api/agenda/semaine")[1]
     assert len(s["jours"]) == 7 and s["erreurs"] == []
     assert c.json("GET", "/api/meteo/semaine")[1] == {"erreur": "Indiquez votre ville dans les Réglages."}
+
+
+def test_mode_cadre_garde_l_ecran_allume(tmp_path):
+    class FauxEcran:
+        def __init__(self):
+            self.etats = []
+
+        def garder_allume(self, actif):
+            self.etats.append(actif)
+    ecran = FauxEcran()
+    coffre = plateforme.CoffreFichier(str(tmp_path / "c.json"))
+    a = appli_locale.Appli(str(tmp_path / "d"), plateforme.RappelsSimules(str(tmp_path / "r.json")), None, coffre, ecran=ecran)
+    assert ecran.etats == [False] and a.reglages_publics()["cadre"] == ""
+    assert a.enregistrer_reglages({"cadre": "1"})["cadre"] == "1" and ecran.etats[-1] is True
+    a.enregistrer_reglages({"ville": "Lyon"})  # un autre réglage ne quitte pas le mode cadre
+    assert ecran.etats[-1] is True and a.reglages_publics()["cadre"] == "1"
+    a.enregistrer_reglages({"cadre": ""})
+    assert ecran.etats[-1] is False

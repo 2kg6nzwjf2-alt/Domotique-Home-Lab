@@ -34,7 +34,7 @@ from placard import resume as resume_placard  # noqa: E402  (garde-manger/placar
 
 MARQUEUR_MAISON = "/*__MAISON__*/null"
 MARQUEUR_GM = "/*__GARDE_MANGER__*/null"
-REGLAGES_PUBLICS = ("liste_courses", "ville")
+REGLAGES_PUBLICS = ("liste_courses", "ville", "cadre")  # cadre : "1" = mode cadre (écran toujours allumé)
 ANCIENS_REGLAGES = ("smartlife_cle", "smartlife_secret", "smartlife_region", "smartlife_alarme", "smartlife_camera")
 
 
@@ -46,13 +46,14 @@ class Appli:
     """Toute la logique de l'appli, indépendante du serveur HTTP (facile à tester)."""
 
     def __init__(self, dossier_donnees, rappels, agenda_appareil, coffre, scanner=None, off=None,
-                 icloud=None, appareil=None, partage=None):
+                 icloud=None, appareil=None, partage=None, ecran=None):
         """`icloud` : objet avec `rafraichir(chemin)` (téléchargement depuis iCloud avant lecture).
         `partage` : "icloud" si les données sont dans iCloud Drive, "appareil" sinon (affiché dans les Réglages)."""
         self.rappels, self.agenda_appareil, self.coffre = rappels, agenda_appareil, coffre
         self.scanner, self.fiches = scanner, off or OpenFoodFacts()
         self.appareil, self.partage = appareil, partage
         self.icloud, self.dossier_donnees = icloud, dossier_donnees
+        self.ecran = ecran  # objet avec garder_allume(bool) : mode cadre
         rafraichir = icloud.rafraichir if icloud is not None else None
         self.etat_gm = Stockage(os.path.join(dossier_donnees, "garde-manger", "etat.json"), rafraichir, appareil)
         self.menage = Menage(os.path.join(dossier_donnees, "menage.json"), avant_lecture=rafraichir, appareil=appareil)
@@ -70,6 +71,11 @@ class Appli:
             r = {k: v for k, v in r.items() if k not in ANCIENS_REGLAGES}
             self.coffre.ecrire(r)
         self.reglages = r
+        if getattr(self, "ecran", None) is not None:
+            try:
+                self.ecran.garder_allume(r.get("cadre") == "1")
+            except Exception as e:
+                print("Écran toujours allumé impossible :", e)
         self._meteo = Meteo.depuis_texte(r.get("ville"))
         self._agenda_ical = None
         if r.get("agenda_ical"):

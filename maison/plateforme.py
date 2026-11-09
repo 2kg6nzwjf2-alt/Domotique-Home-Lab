@@ -347,10 +347,20 @@ class ICloudIOS:
         valeur = valeurs.objectForKey_(self.CLE) if valeurs else None
         return str(valeur) if valeur else None
 
-    def rafraichir(self, chemin, attente=6.0):
+    def statut(self, chemin):
+        """« a_jour », « ancienne » (une version plus récente attend dans iCloud), « pas_telechargee », ou None (hors iCloud)."""
+        dossier, nom = os.path.split(chemin)
+        if not os.path.exists(chemin) and os.path.exists(os.path.join(dossier, f".{nom}.icloud")):
+            return "pas_telechargee"
+        statut = self._statut(chemin)
+        if statut is None:
+            return None
+        return "a_jour" if statut == self.A_JOUR else "ancienne" if statut.endswith("Downloaded") else "pas_telechargee"
+
+    def rafraichir(self, chemin, attente=6.0, forcer=False):
         with self._verrou:
             maintenant = time.monotonic()
-            if maintenant - self._derniers.get(chemin, -60) < 3:  # pas plus d'une demande toutes les 3 secondes
+            if not forcer and maintenant - self._derniers.get(chemin, -60) < 3:  # pas plus d'une demande toutes les 3 secondes
                 return
             self._derniers[chemin] = maintenant
         self._gestionnaire.startDownloadingUbiquitousItemAtURL_error_(self._URL.fileURLWithPath_(chemin), None)

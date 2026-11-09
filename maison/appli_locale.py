@@ -9,6 +9,7 @@ entre l'iPhone et l'iPad ; les réglages restent dans le trousseau de l'appareil
 import json
 import mimetypes
 import os
+import re
 import sys
 import threading
 from datetime import datetime, timezone
@@ -25,7 +26,7 @@ import donnees as donnees_gm  # noqa: E402  (garde-manger/donnees.py)
 from liens import soiree  # noqa: E402
 from plateforme import ListeIntrouvable  # noqa: E402
 from plateforme import _cle_liste as plateforme_cle_liste  # noqa: E402
-from menage import Menage  # noqa: E402
+from menage import Menage, PlanningDepasse  # noqa: E402
 from meteo import ErreurMeteo, Meteo  # noqa: E402
 from stockage import EnAttenteICloud, EtatTropGros, Stockage, VersionDepassee  # noqa: E402  (garde-manger/stockage.py)
 from codes_barres import ErreurCode, OpenFoodFacts, code_valide  # noqa: E402  (garde-manger/codes_barres.py)
@@ -50,9 +51,10 @@ class Appli:
         self.rappels, self.agenda_appareil, self.coffre = rappels, agenda_appareil, coffre
         self.scanner, self.fiches = scanner, off or OpenFoodFacts()
         self.appareil, self.partage = appareil, partage
+        self.icloud, self.dossier_donnees = icloud, dossier_donnees
         rafraichir = icloud.rafraichir if icloud is not None else None
         self.etat_gm = Stockage(os.path.join(dossier_donnees, "garde-manger", "etat.json"), rafraichir, appareil)
-        self.menage = Menage(os.path.join(dossier_donnees, "menage.json"), avant_lecture=rafraichir)
+        self.menage = Menage(os.path.join(dossier_donnees, "menage.json"), avant_lecture=rafraichir, appareil=appareil)
         with open(os.path.join(ICI, "templates", "tableau.html"), encoding="utf-8") as f:
             self.page_maison = f.read()
         with open(os.path.join(DOSSIER_GM, "templates", "index.html"), encoding="utf-8") as f:
@@ -124,8 +126,7 @@ class Appli:
             except ErreurMeteo as e:
                 resultat["meteo"] = {"erreur": str(e)}
         resultat["menage"] = self.menage.lire()
-        infos = self.etat_gm.infos()
-        resultat["synchro"] = {"placard": {k: infos[k] for k in ("appareil", "date", "en_attente")}}
+        resultat["synchro"] = self.synchro()
         _, etat = self.etat_gm.lire()
         courses = etat.get("courses") if isinstance(etat.get("courses"), list) else []
         placard = etat.get("pantry") if isinstance(etat.get("pantry"), list) else []
@@ -134,6 +135,34 @@ class Appli:
             "a_finir": [str(p.get("label", ""))[:60] for p in placard if isinstance(p, dict) and p.get("urgent")][:20],
             "placard": len(placard),
         }
+        return resultat
+
+    def synchro(self, forcer=False):
+        """Diagnostic de la synchronisation iCloud : dernier appareil qui a modifié chaque fichier partagé."""
+        fichiers = {"placard": (self.etat_gm, self.etat_gm.chemin), "menage": (self.menage, self.menage.chemin)}
+        if forcer and self.icloud is not None:
+            for _, chemin in fichiers.values():
+                try:
+                    self.icloud.rafraichir(chemin, forcer=True)
+                except Exception:
+                    pass
+        resultat = {}
+        for nom, (source, chemin) in fichiers.items():
+            infos = source.infos()
+            resultat[nom] = {k: infos[k] for k in ("appareil", "date", "en_attente")}
+            if self.icloud is not None:
+                try:
+                    resultat[nom]["icloud"] = self.icloud.statut(chemin)
+                except Exception:
+                    resultat[nom]["icloud"] = None
+        # copies créées par iCloud quand les deux appareils ont écrit en même temps (« menage 2.json »)
+        copies = []
+        for dossier in (self.dossier_donnees, os.path.join(self.dossier_donnees, "garde-manger")):
+            try:
+                copies += [n for n in os.listdir(dossier) if re.fullmatch(r"(etat|menage) \d+\.json", n)]
+            except OSError:
+                pass
+        resultat["copies"] = sorted(copies)
         return resultat
 
     def soiree(self):
@@ -266,7 +295,13 @@ class Gestionnaire(BaseHTTPRequestHandler):
     def do_PUT(self):
         if urlsplit(self.path).path == "/api/menage/taches":
             try:
-                return self._envoyer(200, {"taches": self.appli.menage.enregistrer_taches(self._corps().get("taches"))})
+                corps = self._corps()
+                base = corps.get("version")
+                base = base if isinstance(base, int) and not isinstance(base, bool) else None
+                taches = self.appli.menage.enregistrer_taches(corps.get("taches"), base)
+                return self._envoyer(200, {"taches": taches, "version": self.appli.menage.lire()["version"]})
+            except PlanningDepasse as e:
+                return self._envoyer(409, {"code": "conflit", "version": e.version})
             except ValueError as e:
                 return self._envoyer(400, {"code": "bad_request", "message": str(e)})
         if urlsplit(self.path).path != "/garde-manger/api/etat":
@@ -298,6 +333,8 @@ class Gestionnaire(BaseHTTPRequestHandler):
                 return self._envoyer(200, {"ok": bool(a.rappels.terminer(str(corps.get("id") or "")))})
             if chemin == "/api/reglages":
                 return self._envoyer(200, a.enregistrer_reglages(corps))
+            if chemin == "/api/synchro":
+                return self._envoyer(200, a.synchro(forcer=True))
             if chemin == "/api/menage/cocher":
                 try:
                     return self._envoyer(200, {"fait": a.menage.cocher(str(corps.get("tache") or ""), corps.get("date"), bool(corps.get("fait", True)))})

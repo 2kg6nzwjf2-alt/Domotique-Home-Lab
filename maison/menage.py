@@ -11,7 +11,7 @@ import re
 import tempfile
 import threading
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 # Pièces : position et taille en centimètres (origine en haut à gauche du plan)
 PLAN = {
@@ -65,10 +65,19 @@ def _date(texte):
     return date.fromisoformat(texte)
 
 
+class PlanningDepasse(Exception):
+    """Le planning a été modifié sur l'autre appareil depuis qu'il a été affiché ici."""
+
+    def __init__(self, version):
+        super().__init__("planning modifié sur l'autre appareil")
+        self.version = version
+
+
 class Menage:
-    def __init__(self, chemin, plan=None, avant_lecture=None):
+    def __init__(self, chemin, plan=None, avant_lecture=None, appareil=None):
         self.chemin = chemin
         self.avant_lecture = avant_lecture  # version Pythonista : téléchargement depuis iCloud
+        self.appareil = appareil  # « iPhone », « iPad » : noté à chaque enregistrement
         self.plan = plan or PLAN
         self._pieces = {p["id"] for p in self.plan["pieces"]}
         self._verrou = threading.Lock()
@@ -95,6 +104,10 @@ class Menage:
             # pas encore téléchargé depuis iCloud : écrire effacerait le planning de l'autre appareil
             raise ValueError("Le ménage arrive d'iCloud : réessayez dans un instant.")
         os.makedirs(dossier, exist_ok=True)
+        d["version"] = int(d.get("version") or 0) + 1
+        d["date"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        if self.appareil:
+            d["appareil"] = self.appareil
         fd, temporaire = tempfile.mkstemp(dir=dossier, prefix=".menage-", suffix=".json")
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(d, f, ensure_ascii=False)
@@ -103,7 +116,16 @@ class Menage:
     def lire(self):
         with self._verrou:
             d = self._lire()
-        return {"plan": self.plan, "taches": d["taches"], "fait": d["fait"]}
+        # « version » : version du planning (les tâches cochées ne la changent pas)
+        return {"plan": self.plan, "taches": d["taches"], "fait": d["fait"], "version": int(d.get("version_taches") or 0)}
+
+    def infos(self):
+        """Version, appareil et date du dernier enregistrement (diagnostic de la synchronisation)."""
+        with self._verrou:
+            d = self._lire()
+        dossier, nom = os.path.split(os.path.abspath(self.chemin))
+        return {"version": int(d.get("version") or 0), "appareil": d.get("appareil"), "date": d.get("date"),
+                "en_attente": not os.path.exists(self.chemin) and os.path.exists(os.path.join(dossier, f".{nom}.icloud"))}
 
     def cocher(self, tache, jour, fait=True):
         jour = _date(jour)
@@ -120,7 +142,9 @@ class Menage:
             self._ecrire(d)
             return d["fait"].get(cle, [])
 
-    def enregistrer_taches(self, taches):
+    def enregistrer_taches(self, taches, base=None):
+        """`base` : version du planning que l'appareil avait affichée. Si l'autre appareil a modifié
+        le planning depuis, PlanningDepasse est levée et rien n'est écrit."""
         if not isinstance(taches, list):
             raise ValueError("liste de tâches attendue")
         propres = []
@@ -138,6 +162,9 @@ class Menage:
             propres.append({"id": identifiant, "piece": piece, "titre": titre, "jours": jours})
         with self._verrou:
             d = self._lire()
+            if base is not None and base < int(d.get("version_taches") or 0):
+                raise PlanningDepasse(int(d.get("version_taches") or 0))
+            d["version_taches"] = int(d.get("version_taches") or 0) + 1
             d["taches"] = propres
             ids = {t["id"] for t in propres}
             d["fait"] = {k: [i for i in v if i in ids] for k, v in d["fait"].items()}

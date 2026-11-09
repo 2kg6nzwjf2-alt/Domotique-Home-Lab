@@ -27,7 +27,7 @@ from stockage import Stockage  # noqa: E402  (garde-manger/stockage.py)
 from agenda import Agenda  # noqa: E402
 from liens import soiree  # noqa: E402
 from rappels import Rappels, analyser_json, analyser_texte  # noqa: E402
-from menage import Menage  # noqa: E402
+from menage import Menage, PlanningDepasse  # noqa: E402
 from meteo import ErreurMeteo, Meteo  # noqa: E402
 
 MARQUEUR = "/*__MAISON__*/null"
@@ -189,8 +189,12 @@ def create_app(dossier_donnees=None, mot_de_passe=None, cle_raccourci=None, agen
     @app.put("/api/menage/taches")
     def menage_taches():
         corps = request.get_json(silent=True) or {}
+        base = corps.get("version")
         try:
-            return jsonify(taches=menage.enregistrer_taches(corps.get("taches")))
+            taches = menage.enregistrer_taches(corps.get("taches"), base if isinstance(base, int) and not isinstance(base, bool) else None)
+            return jsonify(taches=taches, version=menage.lire()["version"])
+        except PlanningDepasse as e:
+            return jsonify(code="conflit", version=e.version), 409
         except ValueError as e:
             return jsonify(code="bad_request", message=str(e)), 400
 

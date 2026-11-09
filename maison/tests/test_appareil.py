@@ -324,3 +324,45 @@ def test_synchronisation_entre_appareils(tmp_path):
         assert not (tmp_path / "d" / "menage.json").exists()
     finally:
         serveur.shutdown()
+
+
+def test_planning_menage_entre_appareils(tmp_path):
+    from menage import Menage, PlanningDepasse
+    chemin = str(tmp_path / "menage.json")
+    iphone, ipad = Menage(chemin, appareil="iPhone"), Menage(chemin, appareil="iPad")
+    vu_par_ipad = ipad.lire()["version"]
+    nouvelles = [{"piece": "cuisine", "titre": "Poubelles", "jours": [1, 4]}]
+    iphone.enregistrer_taches(nouvelles, base=iphone.lire()["version"])
+    t = iphone.lire()["taches"][0]["id"]
+    ipad.cocher(t, "2026-11-09")  # cocher ne change pas la version du planning
+    with pytest.raises(PlanningDepasse):
+        ipad.enregistrer_taches([{"piece": "wc", "titre": "WC", "jours": [0]}], base=vu_par_ipad)
+    assert [x["titre"] for x in ipad.lire()["taches"]] == ["Poubelles"]  # rien d'écrasé
+    infos = iphone.infos()
+    assert infos["appareil"] == "iPad" and infos["date"] and infos["en_attente"] is False
+    ipad.enregistrer_taches([{"piece": "wc", "titre": "WC", "jours": [0]}], base=ipad.lire()["version"])
+
+
+def test_diagnostic_synchro_et_copies(tmp_path):
+    class ICloud(FauxICloud):
+        def statut(self, chemin):
+            return "a_jour"
+
+        def rafraichir(self, chemin, forcer=False):
+            self.demandes.append((os.path.basename(chemin), forcer))
+    icloud = ICloud()
+    a = appli_locale.Appli(str(tmp_path / "d"), plateforme.RappelsSimules(str(tmp_path / "r.json")), None,
+                           plateforme.CoffreFichier(str(tmp_path / "c.json")), icloud=icloud, appareil="iPhone", partage="icloud")
+    (tmp_path / "d" / "menage 2.json").write_text("{}")
+    serveur, adresse = appli_locale.demarrer(a)
+    try:
+        c = Client(adresse)
+        s = c.json("POST", "/api/synchro", {})[1]
+        assert s["copies"] == ["menage 2.json"] and s["menage"]["icloud"] == "a_jour" and "placard" in s
+        assert ("menage.json", True) in icloud.demandes and ("etat.json", True) in icloud.demandes
+        m = c.json("GET", "/api/tableau")[1]["menage"]
+        statut, r = c.json("PUT", "/api/menage/taches", {"taches": [{"piece": "cuisine", "titre": "Four", "jours": [2]}], "version": m["version"]})
+        assert statut == 200 and r["version"] == m["version"] + 1
+        assert c.json("PUT", "/api/menage/taches", {"taches": [], "version": m["version"]})[0] == 409
+    finally:
+        serveur.shutdown()

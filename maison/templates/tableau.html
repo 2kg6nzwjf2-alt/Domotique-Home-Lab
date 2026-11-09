@@ -564,9 +564,13 @@ function ouvrirEditeur(){
       if (incompletes){ $('#edMsg').className = 'err'; $('#edMsg').textContent = `${incompletes} tâche${incompletes>1?'s':''} sans nom ou sans jour : complétez ou supprimez-les.`; return; }
       $('#edMsg').className = 'hint dots'; $('#edMsg').textContent = 'Enregistrement';
       try {
-        const r = await fetch('api/menage/taches', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({taches: brouillon})});
+        const r = await fetch('api/menage/taches', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({taches: brouillon, version: menage.version})});
+        if (r.status === 409){
+          $('#edMsg').className = 'err'; $('#edMsg').textContent = 'Le planning a été modifié sur l’autre appareil : il est rechargé. Refaites vos changements.';
+          setTimeout(async () => { dlgMenage.close(); await charger(); }, 2500); return;
+        }
         if (!r.ok) throw 0;
-        menage.taches = (await r.json()).taches;
+        const d = await r.json(); menage.taches = d.taches; if (d.version != null) menage.version = d.version;
         dlgMenage.close(); renderMenage(); if (dernier) renderResume(dernier);
       } catch { $('#edMsg').className = 'err'; $('#edMsg').textContent = 'Échec de l’enregistrement. Réessayez.'; }
     };
@@ -688,18 +692,31 @@ if (APPAREIL){
   };
 }
 
-// dernière modification du placard (diagnostic de la synchronisation, dans les Réglages)
+// diagnostic de la synchronisation iPhone / iPad (dans les Réglages)
 function renderSynchro(s){
-  const el = document.getElementById('r_synchro'); const p = s && s.placard;
-  if (!el || !p) return;
+  const el = document.getElementById('r_synchro');
+  if (!el || !s) return;
   const S = M.synchro || {};
-  let texte = 'Synchronisation : données partagées par iCloud' + (S.appareil ? ' (cet appareil : ' + esc(S.appareil) + ')' : '') + '.';
-  if (p.en_attente) texte += ' Le placard est en cours de téléchargement depuis iCloud.';
-  else if (p.date){
-    const d = new Date(p.date);
-    texte += ` Placard modifié pour la dernière fois ${p.appareil ? 'sur <b>' + esc(p.appareil) + '</b> ' : ''}le ${d.toLocaleDateString('fr-FR', {day:'numeric', month:'long'})} à ${heure(d)}.`;
-  }
-  el.innerHTML = texte;
+  const ligne = (nom, f) => {
+    if (!f) return '';
+    let t = `<b>${nom}</b> : `;
+    if (f.en_attente || f.icloud === 'pas_telechargee') t += 'en cours de téléchargement depuis iCloud';
+    else if (f.date){
+      const d = new Date(f.date);
+      t += `modifié ${f.appareil ? 'sur ' + esc(f.appareil) + ' ' : ''}le ${d.toLocaleDateString('fr-FR', {day:'numeric', month:'long'})} à ${heure(d)}`;
+      if (f.icloud === 'ancienne') t += ' <span class="err">(une version plus récente arrive d’iCloud)</span>';
+    } else t += 'pas encore modifié';
+    return `<li>${t}</li>`;
+  };
+  el.innerHTML = `Synchronisation : données partagées par iCloud${S.appareil ? ' (cet appareil : ' + esc(S.appareil) + ')' : ''}.
+    <ul style="margin:6px 0 6px 18px;padding:0">${ligne('Placard', s.placard)}${ligne('Ménage', s.menage)}</ul>
+    ${(s.copies || []).length ? `<span class="err">iCloud a créé des copies en double (${s.copies.map(esc).join(', ')}) : les deux appareils ont écrit en même temps.</span> ` : ''}
+    Les deux appareils doivent afficher les mêmes heures. <button class="btn ghost small" type="button" id="r_forcer">Synchroniser maintenant</button> <span class="hint" id="r_forcerMsg"></span>`;
+  $('#r_forcer').onclick = async () => {
+    $('#r_forcerMsg').className = 'hint dots'; $('#r_forcerMsg').textContent = 'Demande à iCloud';
+    try { const r = await fetch('api/synchro', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'}); if (!r.ok) throw 0; await charger(); }
+    catch { $('#r_forcerMsg').className = 'err'; $('#r_forcerMsg').textContent = 'Échec.'; }
+  };
 }
 
 // ---------- Mise à jour ----------

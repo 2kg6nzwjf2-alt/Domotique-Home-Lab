@@ -265,6 +265,11 @@ a.app span{color:var(--muted);font-size:13.5px}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chips span{background:var(--bg);border-radius:999px;padding:4px 10px;font-size:13px}
 .chips span.urg{background:var(--warn-soft);color:var(--warn);font-weight:600}
+.chips span.perime{background:var(--bad-soft);color:var(--bad);font-weight:600}
+.chips span small{font-weight:500;opacity:.85;margin-left:4px}
+.idee{display:block;background:var(--accent-soft);border-radius:12px;padding:10px 12px;color:var(--ink);text-decoration:none;font-size:14px}
+.idee b{color:var(--accent)}
+.idee small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
 
 /* réglages */
 details.reglages summary{cursor:pointer;font-weight:600;color:var(--accent)}
@@ -682,7 +687,14 @@ function renderGm(g){
   if (!g){ box.innerHTML = ''; return; }
   let html = '';
   if (g.courses?.length) html += `<p class="eyebrow">Liste de courses · ${g.courses.length}</p><div class="chips">${g.courses.slice(0,12).map(c=>`<span>${esc(c)}</span>`).join('')}${g.courses.length>12?`<span>+${g.courses.length-12}</span>`:''}</div>`;
-  if (g.a_finir?.length) html += `<p class="eyebrow">À finir vite</p><div class="chips">${g.a_finir.map(c=>`<span class="urg">${esc(c)}</span>`).join('')}</div>`;
+  const quand = n => n < 0 ? 'périmé' : n === 0 ? 'aujourd’hui' : n === 1 ? 'demain' : `dans ${n} j`;
+  if (g.peremption?.length) html += `<p class="eyebrow">À consommer bientôt</p><div class="chips">${g.peremption.map(p =>
+    `<span class="${p.jours < 0 ? 'perime' : 'urg'}">${esc(p.label)}<small>${quand(p.jours)}</small></span>`).join('')}</div>`;
+  const dejaListes = new Set((g.peremption || []).map(p => p.label));
+  const autres = (g.a_finir || []).filter(c => !dejaListes.has(c));
+  if (autres.length) html += `<p class="eyebrow">À finir vite</p><div class="chips">${autres.map(c=>`<span class="urg">${esc(c)}</span>`).join('')}</div>`;
+  if (g.idee) html += `<a class="idee" href="garde-manger/#recette=${encodeURIComponent(g.idee.nom)}">Idée pour ce soir : <b>${esc(g.idee.nom)}</b>
+    <small>Utilise ${esc(g.idee.utilise.join(', ').toLowerCase())}${g.idee.manque.length ? ' · il manque ' + esc(g.idee.manque.join(', ').toLowerCase()) : ' · tout est là'}</small></a>`;
   if (!html) html = `<p class="hint">${g.placard ? `${g.placard} produit${g.placard>1?'s':''} dans le placard. Aucune course en attente.` : 'Ouvrez Garde-manger pour remplir votre placard.'}</p>`;
   box.innerHTML = html;
 }
@@ -739,7 +751,9 @@ function renderResume(d){
   if (rdv) morceaux.push(`${rdv} rendez-vous à venir`);
   const retard = (d.rappels?.rappels || []).filter(r => echeance(r).cls === 'retard').length;
   if (retard) morceaux.push(`<b>${retard} tâche${retard>1?'s':''} en retard</b>`);
-  const finir = d.garde_manger?.a_finir || [];
+  const per = d.garde_manger?.peremption || [], perimes = per.filter(p => p.jours < 0).length;
+  if (perimes) morceaux.push(`<b>${perimes} produit${perimes > 1 ? 's' : ''} périmé${perimes > 1 ? 's' : ''}</b>`);
+  const finir = [...new Set([...per.filter(p => p.jours >= 0 && p.jours <= 1).map(p => p.label), ...(d.garde_manger?.a_finir || [])])];
   if (finir.length) morceaux.push(`${esc(finir.slice(0,3).join(', ').toLowerCase())} à finir`);
   if (menage){ const auj = jourCle(new Date()), reste = tachesDu(auj).filter(t => !faitesDu(auj).has(t.id)).length; if (reste) morceaux.push(`${reste} tâche${reste>1?'s':''} de ménage`); }
   const [auj, dem] = d.meteo?.jours || [];

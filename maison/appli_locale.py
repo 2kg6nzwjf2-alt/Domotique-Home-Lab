@@ -30,6 +30,7 @@ from menage import Menage, PlanningDepasse  # noqa: E402
 from meteo import ErreurMeteo, Meteo  # noqa: E402
 from stockage import EnAttenteICloud, EtatTropGros, Stockage, VersionDepassee  # noqa: E402  (garde-manger/stockage.py)
 from codes_barres import ErreurCode, OpenFoodFacts, code_valide  # noqa: E402  (garde-manger/codes_barres.py)
+from placard import resume as resume_placard  # noqa: E402  (garde-manger/placard.py)
 
 MARQUEUR_MAISON = "/*__MAISON__*/null"
 MARQUEUR_GM = "/*__GARDE_MANGER__*/null"
@@ -145,13 +146,7 @@ class Appli:
         resultat["menage"] = self.menage.lire()
         resultat["synchro"] = self.synchro()
         _, etat = self.etat_gm.lire()
-        courses = etat.get("courses") if isinstance(etat.get("courses"), list) else []
-        placard = etat.get("pantry") if isinstance(etat.get("pantry"), list) else []
-        resultat["garde_manger"] = {
-            "courses": [str(c.get("label", ""))[:60] for c in courses if isinstance(c, dict)][:50],
-            "a_finir": [str(p.get("label", ""))[:60] for p in placard if isinstance(p, dict) and p.get("urgent")][:20],
-            "placard": len(placard),
-        }
+        resultat["garde_manger"] = resume_placard(etat)
         return resultat
 
     def synchro(self, forcer=False):

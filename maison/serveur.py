@@ -23,6 +23,7 @@ sys.path.insert(0, DOSSIER_GM)
 
 import app as garde_manger  # noqa: E402  (garde-manger/app.py)
 from stockage import Stockage  # noqa: E402  (garde-manger/stockage.py)
+from placard import resume as resume_placard  # noqa: E402  (garde-manger/placard.py)
 
 from agenda import Agenda  # noqa: E402
 from liens import soiree  # noqa: E402
@@ -169,13 +170,7 @@ def create_app(dossier_donnees=None, mot_de_passe=None, cle_raccourci=None, agen
                 resultat["agenda"] = {"evenements": [], "erreurs": ["Agenda illisible"]}
         resultat["menage"] = menage.lire()
         _, etat = etat_gm.lire()
-        courses = etat.get("courses") if isinstance(etat.get("courses"), list) else []
-        placard = etat.get("pantry") if isinstance(etat.get("pantry"), list) else []
-        resultat["garde_manger"] = {
-            "courses": [str(c.get("label", ""))[:60] for c in courses if isinstance(c, dict)][:50],
-            "a_finir": [str(p.get("label", ""))[:60] for p in placard if isinstance(p, dict) and p.get("urgent")][:20],
-            "placard": len(placard),
-        }
+        resultat["garde_manger"] = resume_placard(etat)
         return jsonify(resultat)
 
     @app.get("/api/agenda/semaine")

@@ -77,7 +77,7 @@ class Meteo:
             d = self._json(PREVISIONS, {
                 "latitude": lieu["lat"], "longitude": lieu["lon"], "timezone": "auto", "forecast_days": 2,
                 "current": "temperature_2m,weather_code",
-                "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
+                "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset",
             })
             jours = []
             quotidien = d.get("daily") or {}
@@ -86,7 +86,8 @@ class Meteo:
                 libelle, icone = decrire(valeur("weather_code"))
                 jours.append({"date": date, "libelle": libelle, "icone": icone,
                               "min": valeur("temperature_2m_min"), "max": valeur("temperature_2m_max"),
-                              "pluie": valeur("precipitation_probability_max")})
+                              "pluie": valeur("precipitation_probability_max"),
+                              "lever": str(valeur("sunrise") or "")[11:16], "coucher": str(valeur("sunset") or "")[11:16]})
             actuel = d.get("current") or {}
             libelle, icone = decrire(actuel.get("weather_code"))
             resultat = {"lieu": lieu["nom"], "jours": jours,

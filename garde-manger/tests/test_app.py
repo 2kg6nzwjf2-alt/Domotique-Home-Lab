@@ -295,3 +295,22 @@ def test_route_etat_conflit(client):
     r = client.put("/api/etat", json={"etat": {"a": 2}, "version": 0})
     assert r.status_code == 409 and r.get_json() == {"code": "conflit", "version": 1}
     assert client.put("/api/etat", json={"etat": {"a": 3}, "version": 1}).status_code == 200
+
+
+# ---------- Dates de péremption ----------
+def test_resume_placard_peremption_et_idee():
+    from datetime import date
+    import placard
+    etat = {"pantry": [{"id": "oeuf", "label": "Œufs"}, {"id": "beurre", "label": "Beurre"},
+                       {"id": "champignon", "label": "Champignons", "dlc": "2026-11-11"},
+                       {"id": "yaourt", "label": "Yaourts", "dlc": "2026-11-08"},
+                       {"id": "lait", "label": "Lait", "dlc": "2026-11-30"},
+                       {"id": "x:sauce", "label": "Sauce", "dlc": "pas une date"}],
+            "courses": [{"id": "pain", "label": "Pain"}]}
+    r = placard.resume(etat, date(2026, 11, 10))
+    assert r["peremption"] == [{"label": "Yaourts", "dlc": "2026-11-08", "jours": -2},
+                               {"label": "Champignons", "dlc": "2026-11-11", "jours": 1}]
+    assert r["idee"]["nom"] == "Omelette aux champignons" and r["idee"]["utilise"] == ["Champignons"] and r["idee"]["manque"] == []
+    assert r["courses"] == ["Pain"] and r["placard"] == 6
+    assert placard.resume({"pantry": [{"id": "oeuf", "label": "Œufs"}]})["idee"] is None  # rien à finir : pas d'idée
+    assert placard.jours_restants(None, date(2026, 11, 10)) is None

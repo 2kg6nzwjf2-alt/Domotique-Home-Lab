@@ -95,6 +95,19 @@ button{cursor:pointer}
 .chip.plus .lbl{padding:6px 11px}
 .chip.plus:hover{color:var(--enamel);box-shadow:inset 0 0 0 1px var(--enamel)}
 .chip .qty{font-family:var(--f-mono);font-size:11.5px;color:var(--muted);font-weight:500;margin-left:2px}
+/* dates de péremption */
+.chip .dlc{font-size:10.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;border-radius:999px;padding:2px 6px;margin-left:4px;background:var(--surface);color:var(--muted)}
+.chip .dlc.bientot{background:var(--urgent);color:#fff}
+.chip .dlc.perime{background:var(--miss);color:#fff}
+.chip.bientot{box-shadow:inset 0 0 0 1.5px var(--urgent)}
+.chip.perime{box-shadow:inset 0 0 0 1.5px var(--miss);background:var(--miss-soft)}
+.alerte-dlc{background:var(--urgent-soft);border-radius:10px;padding:10px 12px;font-size:13.5px;margin:0 0 10px}
+.alerte-dlc b{font-weight:700}
+.alerte-dlc .perime{color:var(--miss);font-weight:700}
+.dates{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.dates button{border:1.5px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 11px;font:inherit;font-size:13.5px;font-weight:500;color:var(--ink);cursor:pointer}
+.dates button[aria-pressed="true"]{background:var(--enamel);border-color:var(--enamel);color:var(--enamel-ink)}
+.dates input[type=date]{font:inherit;font-size:16px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:5px 8px}
 .list .qty{font-family:var(--f-mono);font-size:12px;color:var(--muted);margin-left:6px}
 .stepper{display:inline-flex;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:3px}
 .stepper button{border:0;background:none;width:30px;height:30px;border-radius:7px;font-size:18px;line-height:1;color:var(--enamel);font-weight:700}
@@ -669,6 +682,37 @@ function addIngredient(text){
   return 1;
 }
 
+// ---------- Dates de péremption ----------
+const BIENTOT = 3, PRIORITE = 2;  // jours : signalé, puis ses recettes passent en premier
+const aujourdhui0 = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); };
+const isoJour = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const dansJours = n => { const d = aujourdhui0(); d.setDate(d.getDate() + n); return isoJour(d); };
+const dateDlc = dlc => { const [a, m, j] = String(dlc || '').split('-').map(Number); return a && m && j ? new Date(a, m - 1, j) : null; };
+function joursAvant(dlc){ const d = dateDlc(dlc); return d ? Math.round((d - aujourdhui0()) / 86400000) : null; }
+const aFinir = p => !!p.urgent || (joursAvant(p.dlc) ?? 99) <= PRIORITE;
+function texteDlc(dlc, court){
+  const n = joursAvant(dlc); if (n == null) return '';
+  if (n < 0) return court ? 'périmé' : (n === -1 ? 'périmé depuis hier' : `périmé depuis ${-n} jours`);
+  if (n === 0) return court ? 'auj.' : 'à finir aujourd’hui';
+  if (n === 1) return court ? 'demain' : 'à finir demain';
+  if (n <= BIENTOT) return court ? `J-${n}` : `à finir dans ${n} jours`;
+  return (court ? '' : 'avant le ') + dateDlc(dlc).toLocaleDateString('fr-FR', {day:'numeric', month:'short'});
+}
+const classeDlc = dlc => { const n = joursAvant(dlc); return n == null ? '' : n < 0 ? 'perime' : n <= BIENTOT ? 'bientot' : ''; };
+// choix de la date : boutons rapides et calendrier ; `choisir(iso ou '')` est appelée à chaque changement
+const RACCOURCIS_DLC = [['Aujourd’hui', 0], ['Demain', 1], ['Dans 3 j', 3], ['Dans 1 sem.', 7], ['Dans 2 sem.', 14]];
+function champDates(conteneur, valeur, choisir){
+  const dessiner = () => {
+    conteneur.innerHTML = `<div class="dates">${RACCOURCIS_DLC.map(([t, n]) => `<button type="button" data-j="${n}" aria-pressed="${valeur === dansJours(n)}">${t}</button>`).join('')}
+      <input type="date" aria-label="Date limite" value="${esc(valeur || '')}">
+      ${valeur ? '<button type="button" data-aucune>Pas de date</button>' : ''}</div>`;
+    conteneur.querySelectorAll('[data-j]').forEach(b => b.onclick = () => { valeur = dansJours(+b.dataset.j); choisir(valeur); dessiner(); });
+    conteneur.querySelector('input').onchange = e => { valeur = e.target.value || ''; choisir(valeur); dessiner(); };
+    conteneur.querySelector('[data-aucune]')?.addEventListener('click', () => { valeur = ''; choisir(''); dessiner(); });
+  };
+  dessiner();
+}
+
 // ---------- Rendu du placard ----------
 function renderPantry(){
   $('#example').hidden = !isExample;
@@ -677,6 +721,12 @@ function renderPantry(){
   if (!pantry.length){ box.innerHTML = '<div class="empty">Votre placard est vide. Ajoutez un ingrédient ci-dessus ou piochez dans les ajouts rapides.</div>'; }
   const groups = {};
   for (const p of pantry){ const c = p.id.startsWith('x:') ? 'autre' : ING[p.id].cat; (groups[c] ||= []).push(p); }
+  const bientot = pantry.filter(p => (joursAvant(p.dlc) ?? 99) <= BIENTOT).sort((a, b) => joursAvant(a.dlc) - joursAvant(b.dlc));
+  if (bientot.length){
+    const al = document.createElement('p'); al.className = 'alerte-dlc';
+    al.innerHTML = '<b>À consommer bientôt :</b> ' + bientot.map(p => `${esc(p.label)} <span class="${joursAvant(p.dlc) < 0 ? 'perime' : ''}">(${esc(texteDlc(p.dlc))})</span>`).join(' · ');
+    box.append(al);
+  }
   for (const c of [...Object.keys(CATS),'autre']){
     if (!groups[c]) continue;
     const wrap = document.createElement('div'); wrap.className = 'cat';
@@ -684,9 +734,11 @@ function renderPantry(){
     const chips = wrap.querySelector('.chips');
     for (const p of groups[c]){
       const el = document.createElement('span');
-      el.className = 'chip' + (p.urgent?' urgent':'') + (p.id.startsWith('x:')?' custom':'');
+      const cd = classeDlc(p.dlc);
+      el.className = 'chip' + (p.urgent && !cd ? ' urgent' : '') + (cd ? ' ' + cd : '') + (p.id.startsWith('x:')?' custom':'');
       const q = p.n!=null ? `<span class="qty">${esc(fmtAmt(p.n,p.u))}</span>` : '';
-      el.innerHTML = `<button type="button" class="lbl" title="Quantité et « à finir »">${esc(p.label)}${q}</button><button type="button" class="x" aria-label="Retirer ${esc(p.label)}">×</button>`;
+      const dl = p.dlc ? `<span class="dlc ${cd}">${esc(texteDlc(p.dlc, true))}</span>` : '';
+      el.innerHTML = `<button type="button" class="lbl" title="Quantité, date limite et « à finir »">${esc(p.label)}${q}${dl}</button><button type="button" class="x" aria-label="Retirer ${esc(p.label)}">×</button>`;
       el.querySelector('.lbl').onclick = () => openItem(p);
       el.querySelector('.x').onclick = () => { touch(); pantry = pantry.filter(q=>q!==p); update(); };
       chips.append(el);
@@ -781,7 +833,7 @@ const lackTxt = x => x.st==='short' ? `${ING[x.k].label.toLowerCase()} (+${fmtAm
 
 function renderResults(){
   const pmap = new Map(pantry.map(p=>[p.id,p]));
-  const urgent = new Set(pantry.filter(p=>p.urgent).map(p=>p.id));
+  const urgent = new Set(pantry.filter(aFinir).map(p=>p.id));
   const out = $('#results'); out.innerHTML = '';
   if (!pantry.length){ out.innerHTML = '<div class="empty">Ajoutez quelques ingrédients à votre placard pour voir les plats possibles.</div>'; return; }
   const list = RECIPES
@@ -1180,9 +1232,9 @@ function stepOf(u, v){
 function openItem(p){
   const k = p.id.startsWith('x:') ? null : p.id;
   let u = p.u || EDU[k] || UNITE_RAYON[rayonDe(k)] || 'pc';
-  let v = p.n;
+  let v = p.n, dlc = p.dlc || '';
   const body = $('#dBody');
-  const commit = () => { touch(); update(); dlg.close(); };
+  const commit = () => { if (dlc) p.dlc = dlc; else delete p.dlc; touch(); update(); dlg.close(); };
   const draw = () => {
     const units = unitChoices(k, u);
     if (!units.includes(u)) u = units[0];
@@ -1190,6 +1242,8 @@ function openItem(p){
     body.innerHTML = `<button class="close" type="button" aria-label="Fermer">×</button>
       <h2 id="dName">${esc(p.label)}</h2>
       <div class="editor">
+        <p class="eyebrow">À consommer avant (facultatif)</p>
+        <div id="qDates"></div>
         ${units.length>1?`<p class="eyebrow">Unité</p><div class="seg" role="group" aria-label="Unité">${units.map(x=>`<button type="button" data-u="${x}" aria-pressed="${x===u}">${esc(ULABEL[x]||UNIT[x]?.p||x)}</button>`).join('')}</div>`:''}
         <p class="eyebrow">Combien en avez-vous ? Touchez une valeur</p>
         <div class="qpad">${pre.map(x=>`<button type="button" data-v="${x}" aria-pressed="${v!=null && Math.abs(v-x)<1e-9}">${esc(fmtAmt(x,u))}</button>`).join('')}</div>
@@ -1204,6 +1258,7 @@ function openItem(p){
         <p class="hint">« Je ne sais pas » : l'ingrédient comptera comme disponible en quantité suffisante.</p>
       </div>`;
     body.querySelector('.close').onclick = () => dlg.close();
+    champDates($('#qDates'), dlc, x => { dlc = x; });
     body.querySelectorAll('[data-u]').forEach(b => b.onclick = () => {
       const nu = b.dataset.u;
       if (v!=null){ const c = conv(v, u, k, UNIT[nu].dim); v = c!=null ? Math.round(c/UNIT[nu].f*100)/100 : null; }
@@ -1438,7 +1493,7 @@ function produitCatalogue(f){
   for (const t of [f.nom, f.generique, ...[...(f.categories || [])].reverse()]){ const k = t && resolve(t); if (k) return k; }
   return null;
 }
-function rangerProduit(label, qte){
+function rangerProduit(label, qte, dlc){
   touch();
   const avant = new Set(pantry.map(p => p.id));
   addIngredient(label);
@@ -1450,6 +1505,8 @@ function rangerProduit(label, qte){
       if (p.n != null && UNIT[p.u]){ const v = conv(qte.n, qte.u, id, UNIT[p.u].dim); if (v != null) p.n = Math.round((p.n + v / UNIT[p.u].f) * 100) / 100; }
     } else { p.n = qte.n; p.u = qte.u; }
   }
+  // date limite : on garde la plus proche (le produit déjà entamé passe avant le nouveau)
+  if (p && dlc && (!p.dlc || dlc < p.dlc)) p.dlc = dlc;
   update();
   toast(p && avant.has(id) ? `${label} : quantité ajoutée` : `${label} ajouté au placard`);
 }
@@ -1492,15 +1549,18 @@ function ficheScan(f){
     const body = fenetreScan(`<h2 id="dName">Produit inconnu</h2>
       <form class="editor" id="nomForm" autocomplete="off">
         <p class="hint">Le code ${esc(f.code)} n’est pas dans Open Food Facts. Donnez-lui un nom : il sera reconnu au prochain scan.</p>
-        <input id="nomProduit" placeholder="Ex. Vinaigre de cidre" maxlength="80" style="border:1.5px solid var(--line);background:var(--bg);border-radius:10px;padding:10px 12px">
+        <input id="nomProduit" placeholder="Ex. Vinaigre de cidre" maxlength="80" style="border:1.5px solid var(--line);background:var(--bg);border-radius:10px;padding:10px 12px;font-size:16px">
+        <p class="eyebrow">À consommer avant (facultatif)</p><div id="scanDates"></div>
         <div class="row"><button class="btn" type="submit">Ajouter au placard</button></div>
       </form>`);
     body.querySelector('#nomForm').onsubmit = e => {
       e.preventDefault();
       const nom = body.querySelector('#nomProduit').value.trim(); if (!nom) return;
       const k = resolve(nom), label = k ? ING[k].label : nom;
-      retenir(label); dlg.close(); rangerProduit(label, null);
+      retenir(label); dlg.close(); rangerProduit(label, null, dlcScan);
     };
+    let dlcScan = '';
+    champDates(body.querySelector('#scanDates'), '', x => { dlcScan = x; });
     body.querySelector('#nomProduit').focus();
     return;
   }
@@ -1513,14 +1573,17 @@ function ficheScan(f){
     <div class="editor">
       ${k ? `<p>Rangé dans <b>${esc(ING[k].label)}</b> <span class="hint">(${esc(CATS[ING[k].cat] || '')})</span></p>` : `<p>Ajouté sous son nom : <b>${esc(f.nom)}</b></p>`}
       ${qte ? `<p class="hint">Quantité : ${esc(fmtAmt(qte.n, qte.u))}. Si le produit est déjà dans le placard, elle s’ajoute.</p>` : ''}
+      <p class="eyebrow">À consommer avant (facultatif)</p><div id="scanDates"></div>
       <div class="row">
         <button class="btn" type="button" id="scanOk">Ajouter au placard</button>
         ${k && !f.memoire ? `<button class="btn ghost" type="button" id="scanPropre">Ajouter sous « ${esc(f.nom)} »</button>` : ''}
       </div>
       ${f.memoire ? '' : '<p class="hint">Fiche Open Food Facts (base collaborative).</p>'}
     </div>`);
-  body.querySelector('#scanOk').onclick = () => { retenir(choix); dlg.close(); rangerProduit(choix, qte); };
-  body.querySelector('#scanPropre')?.addEventListener('click', () => { retenir(f.nom); dlg.close(); rangerProduit(f.nom, qte); });
+  let dlcScan = '';
+  champDates(body.querySelector('#scanDates'), '', x => { dlcScan = x; });
+  body.querySelector('#scanOk').onclick = () => { retenir(choix); dlg.close(); rangerProduit(choix, qte, dlcScan); };
+  body.querySelector('#scanPropre')?.addEventListener('click', () => { retenir(f.nom); dlg.close(); rangerProduit(f.nom, qte, dlcScan); });
 }
 if (GM.codes || GM.statique){
   $('#scanRow').hidden = false;
@@ -1584,7 +1647,7 @@ if (GM.claude) {
     st.hidden = false; st.className = 'status dots'; st.textContent = 'Claude réfléchit';
     try {
       const {recettes} = await apiClaude('idees', {
-        placard: pantry.map(p => ({nom:p.label, quantite: p.n!=null ? fmtAmt(p.n,p.u) : '', a_finir: !!p.urgent})),
+        placard: pantry.map(p => ({nom:p.label, quantite: p.n!=null ? fmtAmt(p.n,p.u) : '', a_finir: aFinir(p), ...(p.dlc ? {date_limite: p.dlc} : {})})),
         personnes: F.people, ustensiles: mesUstensiles(),
         filtres: {vegetarien:F.vege, rapide:F.quick, facile:F.easy, type:F.kind},
         deja: previous.slice(-20)
@@ -1639,6 +1702,14 @@ if (GM.claude) {
   };
 }
 
+
+// Ouverture d'une recette demandée par le tableau de bord (lien « garde-manger/#recette=<nom> »)
+const recetteDemandee = decodeURIComponent((location.hash.match(/^#recette=(.+)$/) || [])[1] || '');
+if (recetteDemandee){
+  history.replaceState(null, '', location.pathname + location.search);
+  const r = RECIPES.find(x => x.n === recetteDemandee);
+  if (r) openLocal(r);
+}
 })();
 </script>
 

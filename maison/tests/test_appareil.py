@@ -148,7 +148,8 @@ def test_etat_garde_manger_et_tableau(appli):
     etat = {"courses": [{"id": "lait", "label": "Lait"}], "pantry": [{"id": "courgette", "label": "Courgettes", "urgent": True}]}
     assert c.json("PUT", "/garde-manger/api/etat", {"etat": etat})[1]["version"] == 1
     assert c.json("GET", "/garde-manger/api/etat")[1]["etat"] == etat
-    assert c.json("GET", "/api/tableau")[1]["garde_manger"] == {"courses": ["Lait"], "a_finir": ["Courgettes"], "placard": 1}
+    gm = c.json("GET", "/api/tableau")[1]["garde_manger"]
+    assert {k: gm[k] for k in ("courses", "a_finir", "placard")} == {"courses": ["Lait"], "a_finir": ["Courgettes"], "placard": 1}
     assert c.appel("PUT", "/garde-manger/api/etat", {"etat": [1]})[0] == 400
     assert "soiree" in injecte(c.appel("GET", "/garde-manger/")[1], "GM")  # calculé depuis l'agenda du jour
 

@@ -187,7 +187,7 @@ def test_garde_manger_sous_appli(appli):
     assert c.put("/garde-manger/api/etat", json={"etat": {"courses": [{"id": "lait", "label": "Lait"}],
                                                            "pantry": [{"id": "courgette", "label": "Courgettes", "urgent": True}]}}).status_code == 200
     gm = c.get("/api/tableau").get_json()["garde_manger"]
-    assert gm == {"courses": ["Lait"], "a_finir": ["Courgettes"], "placard": 1}
+    assert {k: gm[k] for k in ("courses", "a_finir", "placard", "peremption")} == {"courses": ["Lait"], "a_finir": ["Courgettes"], "placard": 1, "peremption": []}
     assert c.get("/garde-manger/static/apple-touch-icon.png").status_code == 200
 
 

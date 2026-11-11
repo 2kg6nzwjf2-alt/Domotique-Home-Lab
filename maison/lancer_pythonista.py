@@ -128,20 +128,34 @@ def sans_rebond(vue):
         print("Effet élastique non désactivé :", e)
 
 
-def hauteur_barre_etat():
-    """Hauteur de la barre d'état (heure, batterie), que la page laisse libre sans barre de titre."""
+def mesurer_barre_etat():
+    """Hauteur de la barre d'état (heure, batterie) mesurée par iOS, ou 0 si la mesure échoue."""
     try:
         from objc_util import ObjCClass, on_main_thread
+        resultat = []
 
         @on_main_thread
         def mesurer():
-            fenetres = ObjCClass("UIApplication").sharedApplication().windows()
-            hauteurs = [float(f.safeAreaInsets().top) for f in fenetres] if fenetres else []
-            return max(hauteurs + [float(ObjCClass("UIApplication").sharedApplication().statusBarFrame().size.height)])
-        return int(round(mesurer()))
+            app = ObjCClass("UIApplication").sharedApplication()
+            hauteurs = [float(app.statusBarFrame().size.height)]
+            for f in app.windows() or []:
+                hauteurs.append(float(f.safeAreaInsets().top))
+            resultat.append(max(hauteurs))
+
+        mesurer()
+        return int(round(resultat[0])) if resultat else 0
     except Exception as e:
         print("Hauteur de la barre d'état inconnue :", e)
-        return 20
+        return 0
+
+
+def hauteur_barre_etat():
+    """Place à laisser libre en haut de la page sans barre de titre : la mesure d'iOS si elle est
+    plausible, sinon une valeur sûre selon l'appareil (iPad : 24 ; iPhone : 50, encoche comprise)."""
+    mesure = mesurer_barre_etat()
+    if mesure >= 20:
+        return mesure
+    return 24 if plateforme.nom_appareil().lower().startswith("ipad") else 50
 
 
 def creer_appli():
@@ -225,6 +239,14 @@ def main():
     vue.load_url(adresse)
     fenetre.present("fullscreen", hide_title_bar=True)
     sans_rebond(vue)
+
+    def remesurer():
+        """Une fois la fenêtre affichée, la mesure d'iOS est fiable : la page est corrigée si besoin."""
+        mesure = mesurer_barre_etat()
+        if mesure >= 20 and mesure != appli.marge_haut:
+            appli.marge_haut = mesure
+            vue.eval_js(f"document.documentElement.style.setProperty('--marge-ios', '{mesure}px')")
+    ui.delay(remesurer, 1.5)
     try:
         while not fini.wait(0.5):
             pass

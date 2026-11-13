@@ -12,7 +12,7 @@ L'appli Maison (tableau de bord et Garde-manger) tourne directement sur l'iPhone
 | Codes-barres | dans Garde-manger, **Scanner un code-barres** prend une photo du code et range le produit au placard (fiche Open Food Facts) |
 | Dates de péremption | dans Garde-manger, une date « à consommer avant » par produit (au scan ou en touchant le produit) ; le tableau de bord signale ce qui doit être fini et propose une recette |
 | Notifications | ménage du jour le matin, pluie la veille au soir, rendez-vous un peu avant, produits à finir ; programmées pour 7 jours, elles arrivent même appli fermée (Réglages > Notifications) |
-| Mode cadre | bouton en haut à droite : écran toujours allumé, grand texte, sombre la nuit (iPad posé dans la maison) |
+| Mode cadre | bouton en haut à droite : écran toujours allumé, tout le tableau de bord dans l'écran, sombre la nuit (iPad posé dans la maison) ; Garde-manger devient une icône dans l'en-tête, avec le nombre de produits à finir |
 | Courses | les ingrédients manquants d'une recette sont ajoutés à votre liste Rappels « Courses » |
 | Ce soir | Garde-manger propose une recette rapide si la soirée est chargée, et rien si vous dînez dehors |
 

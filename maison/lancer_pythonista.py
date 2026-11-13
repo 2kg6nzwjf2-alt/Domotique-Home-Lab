@@ -248,8 +248,11 @@ def main():
             vue.eval_js(f"document.documentElement.style.setProperty('--marge-ios', '{mesure}px')")
     ui.delay(remesurer, 1.5)
     try:
+        controles = 0
         while not fini.wait(0.5):
-            pass
+            controles += 1
+            if controles % 10 == 0:  # toutes les 5 secondes : le serveur interne répond-il encore ?
+                serveur = appli_locale.relancer_si_muet(serveur, appli)
     finally:
         serveur.shutdown()
         appli.arreter_notifications()  # celles déjà programmées restent

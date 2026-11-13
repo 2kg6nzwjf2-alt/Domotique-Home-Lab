@@ -10,6 +10,7 @@ import json
 import mimetypes
 import os
 import re
+import socket
 import sys
 import threading
 import time
@@ -497,3 +498,34 @@ def demarrer(appli, port=0):
     serveur.daemon_threads = True
     threading.Thread(target=serveur.serve_forever, daemon=True).start()
     return serveur, f"http://127.0.0.1:{serveur.server_address[1]}/"
+
+
+def repond(port):
+    """Vrai si le serveur interne accepte encore les connexions."""
+    try:
+        socket.create_connection(("127.0.0.1", port), timeout=1.5).close()
+        return True
+    except OSError:
+        return False
+
+
+def relancer_si_muet(serveur, appli):
+    """Relance le serveur interne sur le même port s'il ne répond plus ; renvoie le serveur en service.
+
+    Quand iOS met l'appli en veille (iPad verrouillé, autre appli au premier plan), il peut fermer
+    la prise d'écoute du serveur : au réveil, la page affichait « Serveur injoignable » jusqu'à la relance de Maison.
+    """
+    port = serveur.server_address[1]
+    if repond(port):
+        return serveur
+    arret = threading.Thread(target=serveur.shutdown, daemon=True)
+    arret.start()
+    arret.join(2)
+    try:
+        serveur.server_close()
+    except OSError:
+        pass
+    try:
+        return demarrer(appli, port)[0]
+    except OSError:  # port pas encore libéré : nouvel essai au prochain contrôle
+        return serveur

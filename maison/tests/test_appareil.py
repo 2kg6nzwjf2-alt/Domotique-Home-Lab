@@ -477,3 +477,19 @@ def test_notifications_version_pythonista(tmp_path):
         assert a._notif_reveil.is_set()
     finally:
         serveur.shutdown()
+
+
+def test_serveur_relance_s_il_ne_repond_plus(tmp_path):
+    a = appli_locale.Appli(str(tmp_path / "d"), plateforme.RappelsSimules(str(tmp_path / "r.json")), None,
+                           plateforme.CoffreFichier(str(tmp_path / "c.json")))
+    serveur, adresse = appli_locale.demarrer(a)
+    try:
+        assert appli_locale.relancer_si_muet(serveur, a) is serveur  # il répond : rien ne change
+        serveur.socket.close()  # comme après une mise en veille par iOS
+        assert not appli_locale.repond(serveur.server_address[1])
+        nouveau = appli_locale.relancer_si_muet(serveur, a)
+        assert nouveau is not serveur and nouveau.server_address[1] == serveur.server_address[1]
+        serveur = nouveau
+        assert Client(adresse).json("GET", "/api/reglages")[0] == 200  # même adresse : la page ouverte remarche
+    finally:
+        serveur.shutdown()

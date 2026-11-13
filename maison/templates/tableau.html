@@ -266,10 +266,14 @@ dialog.fenetre .te-piece select{font:inherit;font-size:16px;color:var(--ink);bor
   body.cadre main.grid{flex:1 1 auto;min-height:0;align-items:stretch;gap:12px}
   body.cadre .card{min-height:0;overflow:hidden;padding:12px 14px;gap:8px}
   body.cadre .colonne{min-height:0}
-  body.cadre .colonne > .card:not(#carteMeteo){flex:1 1 0;overflow-y:auto;overscroll-behavior:contain}
+  /* Tâches : toute la place sous la météo ; le titre reste en haut, seule la liste défile */
+  body.cadre #carteTaches{flex:1 1 0;display:flex;flex-direction:column}
+  body.cadre #taches{flex:1 1 auto;min-height:0;overflow-y:auto}
+  /* Garde-manger : une icône dans l'en-tête à la place de la carte */
+  body.cadre #carteGm{display:none}
+  body.cadre .gm-icone{display:flex}
   body.cadre #carteMeteo{flex:none}
   body.cadre #carteMeteo .credit{display:none}
-  body.cadre #carteGm .app span{display:none}
   body.cadre #carteAgenda{display:flex;flex-direction:column}
   body.cadre #agenda{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain}
   body.cadre #agenda .frise-scroll{flex:1 1 auto;min-height:0;max-height:none}
@@ -329,6 +333,10 @@ dialog.fenetre .te-piece select{font:inherit;font-size:16px;color:var(--ink);bor
 @keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
 
 /* garde-manger */
+/* icône Garde-manger de l'en-tête (mode cadre sur iPad) : pastille = produits à finir ou périmés */
+.gm-icone{display:none;position:relative;flex:none;margin-left:auto;margin-right:18px;flex-direction:column;align-items:center;gap:2px;text-decoration:none;color:var(--muted);font-size:11.5px;font-weight:600}
+.gm-icone img{width:46px;height:46px;border-radius:12px;display:block}
+.gm-icone .pastille{position:absolute;top:-6px;right:2px;min-width:20px;height:20px;border-radius:10px;padding:0 5px;background:var(--bad);color:#fff;font-size:12px;font-weight:700;line-height:20px;text-align:center}
 a.app{display:flex;gap:14px;align-items:center;text-decoration:none;color:inherit;padding:4px 0}
 a.app img{width:56px;height:56px;border-radius:14px;flex:none}
 a.app b{font-family:var(--f-display);font-size:18px;display:block}
@@ -372,6 +380,9 @@ ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;m
       <p class="date" id="date"></p>
       <p class="resume" id="resume" hidden></p>
     </div>
+    <a class="gm-icone" id="gmIcone" href="garde-manger/" aria-label="Ouvrir Garde-manger">
+      <img src="garde-manger/static/apple-touch-icon.png" alt=""><span>Garde-manger</span><span class="pastille" id="gmPastille" hidden></span>
+    </a>
     <div>
       <div class="clock" id="clock" aria-live="off"></div>
       <div class="maj" id="maj"></div>
@@ -392,7 +403,7 @@ ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;m
       <div id="meteo"><p class="hint dots">Chargement</p></div>
     </section>
 
-    <section class="card" aria-labelledby="h-taches">
+    <section class="card" id="carteTaches" aria-labelledby="h-taches">
       <div class="head">
         <h2 id="h-taches">Tâches</h2>
         <a class="btn ghost small" id="sync" href="#">Synchroniser</a>
@@ -596,7 +607,7 @@ function renderTaches(data){
   const noms = [...groupes.keys()].sort((a,b) => a.localeCompare(b, 'fr'));
   box.innerHTML = avert + '<div class="lists">' + noms.map(nom => {
     const items = groupes.get(nom).sort((a,b) => a.e.ordre - b.e.ordre);
-    const max = ouverts.has(nom) ? items.length : 6;
+    const max = ouverts.has(nom) || cadre ? items.length : 6;  // mode cadre : tout est affiché, la liste défile
     return `<div class="list"><h3>${esc(nom)} <span class="count">${items.length}</span></h3><ul class="tasks">${items.slice(0,max).map(r =>
       `<li class="${r.e.cls}">${M.cocher ? `<button type="button" class="dot" data-id="${esc(r.id)}" aria-label="Cocher ${esc(r.titre)}"></button>` : '<span class="dot" aria-hidden="true"></span>'}<span class="t">${esc(r.titre)}</span>${r.e.txt?`<span class="due">${esc(r.e.txt)}</span>`:''}</li>`).join('')}</ul>
       ${items.length>max?`<button type="button" class="more" data-liste="${esc(nom)}">Voir les ${items.length-max} autres</button>`:''}</div>`;
@@ -772,6 +783,9 @@ $('#menageModifier').onclick = ouvrirEditeur;
 // ---------- Garde-manger ----------
 function renderGm(g){
   const box = $('#gm');
+  const aFinir = new Set([...(g?.peremption || []).map(p => p.label), ...(g?.a_finir || [])]);
+  $('#gmPastille').hidden = !aFinir.size; $('#gmPastille').textContent = aFinir.size;
+  $('#gmIcone').setAttribute('aria-label', 'Ouvrir Garde-manger' + (aFinir.size ? ` : ${aFinir.size} produit${aFinir.size > 1 ? 's' : ''} à finir` : ''));
   if (!g){ box.innerHTML = ''; return; }
   let html = '';
   if (g.courses?.length) html += `<p class="eyebrow">Liste de courses · ${g.courses.length}</p><div class="chips">${g.courses.slice(0,12).map(c=>`<span>${esc(c)}</span>`).join('')}${g.courses.length>12?`<span>+${g.courses.length-12}</span>`:''}</div>`;
@@ -1182,12 +1196,18 @@ function appliquerCadre(){
   $('#cadreBtn').textContent = cadre ? 'Quitter le mode cadre' : 'Mode cadre';
   $('#cadreBtn').setAttribute('aria-pressed', String(cadre));
   appliquerTheme(); garderEcranAllume(cadre);
+  if (dernier) renderTaches(dernier.rappels);  // en mode cadre, toutes les tâches sont listées
   // une fois par nuit (3 h 30), la page se recharge : nouvelle version, nouveau jour, mémoire libérée
   clearTimeout(rechargementNuit);
   if (cadre){
     const d = new Date(), cible = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 3, 30);
     if (cible <= d) cible.setDate(cible.getDate() + 1);
-    rechargementNuit = setTimeout(() => location.reload(), cible - d);
+    // seulement si l'appli répond : recharger sans serveur laisserait une page blanche
+    const recharger = async () => {
+      try { if ((await fetch('api/reglages', {cache:'no-store'})).ok){ location.reload(); return; } } catch {}
+      rechargementNuit = setTimeout(recharger, 600000);
+    };
+    rechargementNuit = setTimeout(recharger, cible - d);
   }
 }
 $('#cadreBtn').onclick = async () => {
